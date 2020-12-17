@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "run_ppo.py", line 276, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 265, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 211, in train_PPO
+    a, a_log_prob = prev_policy.choose_action(format_(s))
+  File "run_ppo.py", line 135, in choose_action
+    mean = self.actor(state)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/module.py", line 727, in _call_impl
+    result = self.forward(*input, **kwargs)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/container.py", line 117, in forward
+    input = module(input)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/module.py", line 727, in _call_impl
+    result = self.forward(*input, **kwargs)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/conv.py", line 423, in forward
+    return self._conv_forward(input, self.weight)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/conv.py", line 420, in _conv_forward
+    self.padding, self.dilation, self.groups)
+RuntimeError: Input type (torch.FloatTensor) and weight type (torch.cuda.FloatTensor) should be the same

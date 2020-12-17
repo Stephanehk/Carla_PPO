@@ -1,0 +1,15 @@
+Episode reward: -402
+Traceback (most recent call last):
+  File "run_ppo.py", line 276, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 265, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 245, in train_PPO
+    current_action_log_probs, state_values, entropies = policy.get_training_params(states,actions)
+  File "run_ppo.py", line 154, in get_training_params
+    action_log_prob = gauss_dist.log_prob(action).to(device)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/distributions/multivariate_normal.py", line 208, in log_prob
+    M = _batch_mahalanobis(self._unbroadcasted_scale_tril, diff)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/distributions/multivariate_normal.py", line 57, in _batch_mahalanobis
+    M_swap = torch.triangular_solve(flat_x_swap, flat_L, upper=False)[0].pow(2).sum(-2)  # shape = b x c
+RuntimeError: Expected b and A to be on the same device, but found b on cpu and A on cuda:0 instead.

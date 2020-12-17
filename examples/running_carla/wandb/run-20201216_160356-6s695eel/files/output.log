@@ -1,0 +1,17 @@
+Episode reward: -362
+tensor([[  0.6611,   0.6350,  10.4810,  ...,   4.0124,   0.8306, -22.1512],
+        [  0.7006,   0.6651,  12.7342,  ...,   4.2185,   0.8499, -22.1512],
+        [  0.6292,   0.6324,   0.6651,  ...,   0.6207,   0.6207,  -0.9039],
+        ...,
+        [  0.6292,   0.6324,   1.0007,  ...,   0.6505,   0.6207,  -3.0099],
+        [  0.6292,   0.6324,   4.4643,  ...,   2.0917,   0.6505, -22.1512],
+        [  0.6292,   0.6324,   2.7983,  ...,   1.3030,   0.6207, -18.3758]],
+       dtype=torch.float64, grad_fn=<SubBackward0>)
+Traceback (most recent call last):
+  File "run_ppo.py", line 281, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 270, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 256, in train_PPO
+    f.write(str(loss.mean().item()))
+io.UnsupportedOperation: not writable

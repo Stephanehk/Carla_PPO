@@ -1,0 +1,9 @@
+Episode reward: -32Traceback (most recent call last):
+
+  File "run_ppo.py", line 289, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 278, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 238, in train_PPO
+    env.cleanup()
+AttributeError: 'CarEnv' object has no attribute 'cleanup'

@@ -2,8 +2,8 @@ import pathlib
 
 
 # change these.
-CLUSTER_QUICKSTART_DIR = '/u/bzhou/cluster_quickstart'
-CARLA_DIR = '/scratch/cluster/bzhou/software/CARLA_0.9.10.1'
+CLUSTER_QUICKSTART_DIR = '/scratch/cluster/stephane/cluster_quickstart'
+CARLA_DIR = '/scratch/cluster/stephane/Carla_0.9.10'
 
 HEADER = f"""#!/bin/bash
 
@@ -26,7 +26,7 @@ sleep 30
 
 BODY = """
 cd {target_dir}
-python3 run.py --world_port $WORLD_PORT --tm_port $TM_PORT --n_vehicles {n_vehicles}
+python3 run_ppo.py --world_port $WORLD_PORT --tm_port $TM_PORT --n_vehicles {n_vehicles}
 """
 
 FOOTER = """

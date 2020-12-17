@@ -1,0 +1,11 @@
+Episode reward: -1704
+Traceback (most recent call last):
+  File "run_ppo.py", line 279, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 268, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 248, in train_PPO
+    current_action_log_probs, state_values, entropies = policy.get_training_params(states,actions)
+  File "run_ppo.py", line 144, in get_training_params
+    state = state.to(device)
+AttributeError: 'list' object has no attribute 'to'

@@ -1,0 +1,29 @@
+Episode reward: -403
+min update1/2:
+torch.FloatTensor
+mse:
+torch.FloatTensor
+entropy:
+torch.FloatTensor
+loss/loss mean:
+tensor([[  0.6605,   6.1280,   0.9149,  ...,   0.8400,   1.2779, -23.3725],
+        [  0.6286,   0.6593,   0.6277,  ...,   0.6498,   0.6498,  -1.5535],
+        [  0.6286,   2.6521,   0.6593,  ...,   0.6498,   0.7825, -23.3725],
+        ...,
+        [  0.6286,   3.3942,   0.7139,  ...,   0.6869,   0.9269, -23.3725],
+        [  0.6286,   1.7418,   0.6277,  ...,   0.6498,   0.6869, -16.5913],
+        [  0.6286,   1.9268,   0.6277,  ...,   0.6498,   0.7169, -19.3935]],
+       grad_fn=<SubBackward0>)
+tensor(0.8769, grad_fn=<MeanBackward0>)
+Traceback (most recent call last):
+  File "run_ppo.py", line 285, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 274, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 265, in train_PPO
+    loss.mean().backward()
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/tensor.py", line 221, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/autograd/__init__.py", line 132, in backward
+    allow_unreachable=True)  # allow_unreachable flag
+RuntimeError: Found dtype Double but expected Float

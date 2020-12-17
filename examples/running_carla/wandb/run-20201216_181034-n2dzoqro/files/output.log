@@ -1,0 +1,4 @@
+CUBLAS error: out of memory (3) in magma_spotrf_LL_expert_gpu at /opt/conda/conda-bld/magma-cuda102_1583546904148/work/src/spotrf_gpu.cpp:137
+CUBLAS error: not initialized (1) in magma_spotrf_LL_expert_gpu at /opt/conda/conda-bld/magma-cuda102_1583546904148/work/src/spotrf_gpu.cpp:137
+CUBLAS error: out of memory (3) in magma_spotrf_LL_expert_gpu at /opt/conda/conda-bld/magma-cuda102_1583546904148/work/src/spotrf_gpu.cpp:138
+CUBLAS error: not initialized (1) in magma_spotrf_LL_expert_gpu at /opt/conda/conda-bld/magma-cuda102_1583546904148/work/src/spotrf_gpu.cpp:138

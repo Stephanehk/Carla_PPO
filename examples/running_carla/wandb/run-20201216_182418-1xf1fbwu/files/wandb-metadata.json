@@ -1,0 +1,31 @@
+{
+    "os": "Linux-4.15.0-112-generic-x86_64-with-Ubuntu-18.04-bionic",
+    "python": "3.6.9",
+    "heartbeatAt": "2020-12-17T00:24:19.668971",
+    "startedAt": "2020-12-17T00:24:18.070898",
+    "docker": null,
+    "gpu": "TITAN V",
+    "gpu_count": 8,
+    "cpu_count": 40,
+    "cuda": null,
+    "args": [
+        "--world_port",
+        "8109",
+        "--tm_port",
+        "8957",
+        "--n_vehicles",
+        "10"
+    ],
+    "state": "running",
+    "codePath": "examples/running_carla/run_ppo.py",
+    "program": "run_ppo.py",
+    "git": {
+        "remote": "https://github.com/bradyz/cluster_quickstart.git",
+        "commit": "df2b60de7d1b21a6bcbc6d8d67dd11cd5a5fde4f"
+    },
+    "email": null,
+    "root": "/scratch/cluster/stephane/cluster_quickstart",
+    "host": "titan-4",
+    "username": "stephane",
+    "executable": "/lusr/bin/python3"
+}

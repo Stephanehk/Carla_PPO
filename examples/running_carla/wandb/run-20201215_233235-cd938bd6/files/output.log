@@ -1,0 +1,9 @@
+Episode reward: -431
+Traceback (most recent call last):
+  File "run_ppo.py", line 280, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 269, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 255, in train_PPO
+    f.write(str(type(loss)))
+io.UnsupportedOperation: not writable

@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "run_ppo.py", line 289, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 278, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 199, in train_PPO
+    policy.load_state_dict("policy_state_dictionary.pt")
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/module.py", line 1025, in load_state_dict
+    state_dict = state_dict.copy()
+AttributeError: 'str' object has no attribute 'copy'

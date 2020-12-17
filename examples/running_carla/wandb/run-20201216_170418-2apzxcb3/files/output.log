@@ -1,0 +1,227 @@
+Episode reward: -358
+    on epoch 0
+    on epoch 1
+    on epoch 2
+    on epoch 3
+    on epoch 4
+    on epoch 5
+    on epoch 6
+    on epoch 7
+    on epoch 8
+    on epoch 9
+    on epoch 10
+    on epoch 11
+    on epoch 12
+    on epoch 13
+    on epoch 14
+    on epoch 15
+    on epoch 16
+    on epoch 17
+    on epoch 18
+    on epoch 19
+    on epoch 20
+    on epoch 21
+    on epoch 22
+    on epoch 23
+    on epoch 24
+    on epoch 25
+    on epoch 26
+    on epoch 27
+    on epoch 28
+    on epoch 29
+    on epoch 30
+    on epoch 31
+    on epoch 32
+    on epoch 33
+    on epoch 34
+    on epoch 35
+    on epoch 36
+    on epoch 37
+    on epoch 38
+    on epoch 39
+    on epoch 40
+    on epoch 41
+    on epoch 42
+    on epoch 43
+    on epoch 44
+    on epoch 45
+    on epoch 46
+    on epoch 47
+    on epoch 48
+    on epoch 49
+    on epoch 50
+    on epoch 51
+    on epoch 52
+    on epoch 53
+    on epoch 54
+    on epoch 55
+    on epoch 56
+    on epoch 57
+    on epoch 58
+    on epoch 59
+    on epoch 60
+    on epoch 61
+    on epoch 62
+    on epoch 63
+    on epoch 64
+    on epoch 65
+    on epoch 66
+    on epoch 67
+    on epoch 68
+    on epoch 69
+    on epoch 70
+    on epoch 71
+    on epoch 72
+    on epoch 73
+    on epoch 74
+    on epoch 75
+    on epoch 76
+    on epoch 77
+    on epoch 78
+    on epoch 79
+    on epoch 80
+    on epoch 81
+    on epoch 82
+    on epoch 83
+    on epoch 84
+    on epoch 85
+    on epoch 86
+    on epoch 87
+    on epoch 88
+    on epoch 89
+    on epoch 90
+    on epoch 91
+    on epoch 92
+    on epoch 93
+    on epoch 94
+    on epoch 95
+    on epoch 96
+    on epoch 97
+    on epoch 98
+    on epoch 99
+WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 87 (sensor.camera.rgb) 
+WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 88 (sensor.other.collision) 
+Episode reward: -446
+    on epoch 0
+    on epoch 1
+    on epoch 2
+    on epoch 3
+    on epoch 4
+    on epoch 5
+    on epoch 6
+    on epoch 7
+    on epoch 8
+    on epoch 9
+    on epoch 10
+    on epoch 11
+    on epoch 12
+    on epoch 13
+    on epoch 14
+    on epoch 15
+    on epoch 16
+    on epoch 17
+    on epoch 18
+    on epoch 19
+    on epoch 20
+    on epoch 21
+    on epoch 22
+    on epoch 23
+    on epoch 24
+    on epoch 25
+    on epoch 26
+    on epoch 27
+    on epoch 28
+    on epoch 29
+    on epoch 30
+    on epoch 31
+    on epoch 32
+    on epoch 33
+    on epoch 34
+    on epoch 35
+    on epoch 36
+    on epoch 37
+    on epoch 38
+    on epoch 39
+    on epoch 40
+    on epoch 41
+    on epoch 42
+    on epoch 43
+    on epoch 44
+    on epoch 45
+    on epoch 46
+    on epoch 47
+    on epoch 48
+    on epoch 49
+    on epoch 50
+    on epoch 51
+    on epoch 52
+    on epoch 53
+    on epoch 54
+    on epoch 55
+    on epoch 56
+    on epoch 57
+    on epoch 58
+    on epoch 59
+    on epoch 60
+    on epoch 61
+    on epoch 62
+    on epoch 63
+    on epoch 64
+    on epoch 65
+    on epoch 66
+    on epoch 67
+    on epoch 68
+    on epoch 69
+    on epoch 70
+    on epoch 71
+    on epoch 72
+    on epoch 73
+    on epoch 74
+    on epoch 75
+    on epoch 76
+    on epoch 77
+    on epoch 78
+    on epoch 79
+    on epoch 80
+    on epoch 81
+    on epoch 82
+    on epoch 83
+    on epoch 84
+    on epoch 85
+    on epoch 86
+    on epoch 87
+    on epoch 88
+    on epoch 89
+    on epoch 90
+    on epoch 91
+    on epoch 92
+    on epoch 93
+    on epoch 94
+    on epoch 95
+    on epoch 96
+    on epoch 97
+    on epoch 98
+    on epoch 99
+WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 90 (sensor.camera.rgb) 
+WARNING: sensor object went out of the scope but the sensor is still alive in the simulation: Actor 91 (sensor.other.collision) 
+Episode reward: -100
+Traceback (most recent call last):
+  File "run_ppo.py", line 275, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 264, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 244, in train_PPO
+    current_action_log_probs, state_values, entropies = policy.get_training_params(states,actions)
+  File "run_ppo.py", line 148, in get_training_params
+    mean = self.actor(state)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/module.py", line 727, in _call_impl
+    result = self.forward(*input, **kwargs)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/container.py", line 117, in forward
+    input = module(input)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/module.py", line 727, in _call_impl
+    result = self.forward(*input, **kwargs)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/conv.py", line 423, in forward
+    return self._conv_forward(input, self.weight)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/conv.py", line 420, in _conv_forward
+    self.padding, self.dilation, self.groups)
+RuntimeError: Expected 4-dimensional input for 4-dimensional weight [6, 3, 5, 5], but got 3-dimensional input of size [3, 480, 640] instead

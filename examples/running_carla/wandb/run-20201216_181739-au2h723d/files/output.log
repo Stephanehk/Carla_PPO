@@ -1,0 +1,14 @@
+CUBLAS error: out of memory (3) in magma_spotrf_LL_expert_gpu at /opt/conda/conda-bld/magma-cuda102_1583546904148/work/src/spotrf_gpu.cpp:138
+CUBLAS error: not initialized (1) in magma_spotrf_LL_expert_gpu at /opt/conda/conda-bld/magma-cuda102_1583546904148/work/src/spotrf_gpu.cpp:138
+Traceback (most recent call last):
+  File "run_ppo.py", line 279, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 268, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 214, in train_PPO
+    a, a_log_prob = prev_policy.choose_action(format_(s).to(device))
+  File "run_ppo.py", line 138, in choose_action
+    gauss_dist = MultivariateNormal(mean,cov_matrix)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/distributions/multivariate_normal.py", line 149, in __init__
+    self._unbroadcasted_scale_tril = torch.cholesky(covariance_matrix)
+RuntimeError: CUDA error: out of memory

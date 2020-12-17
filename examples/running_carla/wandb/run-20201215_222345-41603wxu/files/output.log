@@ -1,0 +1,13 @@
+Episode reward: -399
+Traceback (most recent call last):
+  File "run_ppo.py", line 279, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 268, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 255, in train_PPO
+    loss.mean().backward()
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/tensor.py", line 221, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/autograd/__init__.py", line 132, in backward
+    allow_unreachable=True)  # allow_unreachable flag
+RuntimeError: Found dtype Double but expected Float

@@ -1,0 +1,15 @@
+Episode reward: -414
+Traceback (most recent call last):
+  File "run_ppo.py", line 275, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 264, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 255, in train_PPO
+    loss.backward()
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/tensor.py", line 221, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/autograd/__init__.py", line 126, in backward
+    grad_tensors_ = _make_grads(tensors, grad_tensors_)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/autograd/__init__.py", line 50, in _make_grads
+    raise RuntimeError("grad can be implicitly created only for scalar outputs")
+RuntimeError: grad can be implicitly created only for scalar outputs

@@ -1,0 +1,11 @@
+Episode reward: 675
+Traceback (most recent call last):
+  File "run_ppo.py", line 291, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 280, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 240, in train_PPO
+    env.cleanup()
+  File "run_ppo.py", line 96, in cleanup
+    actor.destroy()
+AttributeError: 'ActorBlueprint' object has no attribute 'destroy'

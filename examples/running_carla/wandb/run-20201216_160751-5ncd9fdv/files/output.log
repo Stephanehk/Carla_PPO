@@ -1,0 +1,22 @@
+Episode reward: -437
+tensor([[  0.2728,   0.2161,   0.2915,  ...,   0.2102,   0.2102, -21.8515],
+        [  0.4668,   0.2721,   0.4693,  ...,   0.3744,   0.2361, -12.4767],
+        [  0.2564,   0.2161,   0.2721,  ...,   0.2102,   0.2102, -21.8515],
+        ...,
+        [  0.4379,   0.2161,   0.4443,  ...,   0.2671,   0.2102, -20.3595],
+        [  0.4654,   0.2882,   0.4741,  ...,   0.3919,   0.2671, -11.1956],
+        [  0.4526,   0.2398,   0.4598,  ...,   0.2976,   0.2102, -18.1176]],
+       dtype=torch.float64, grad_fn=<SubBackward0>)
+tensor(0.2800, dtype=torch.float64, grad_fn=<MeanBackward0>)
+Traceback (most recent call last):
+  File "run_ppo.py", line 278, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 267, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 258, in train_PPO
+    loss.mean().backward()
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/tensor.py", line 221, in backward
+    torch.autograd.backward(self, gradient, retain_graph, create_graph)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/autograd/__init__.py", line 132, in backward
+    allow_unreachable=True)  # allow_unreachable flag
+RuntimeError: Found dtype Double but expected Float

@@ -1,0 +1,22 @@
+Traceback (most recent call last):
+  File "run_ppo.py", line 268, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo.py", line 257, in main
+    train_PPO(host,world_port)
+  File "run_ppo.py", line 208, in train_PPO
+    a, a_log_prob = prev_policy.choose_action(format_(s))
+  File "run_ppo.py", line 134, in choose_action
+    mean = self.actor(state)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/module.py", line 727, in _call_impl
+    result = self.forward(*input, **kwargs)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/container.py", line 117, in forward
+    input = module(input)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/module.py", line 727, in _call_impl
+    result = self.forward(*input, **kwargs)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/modules/pooling.py", line 155, in forward
+    self.return_indices)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/_jit_internal.py", line 267, in fn
+    return if_false(*args, **kwargs)
+  File "/u/stephane/.local/lib/python3.6/site-packages/torch/nn/functional.py", line 586, in _max_pool2d
+    input, kernel_size, stride, padding, dilation, ceil_mode)
+RuntimeError: CUDA out of memory. Tried to allocate 2.00 MiB (GPU 0; 11.78 GiB total capacity; 9.04 GiB already allocated; 7.12 MiB free; 9.49 GiB reserved in total by PyTorch)
