@@ -90,7 +90,7 @@ class CarEnv:
         if self.episode_start + max_ep_length < time.time():
             done = True
         return self.rgb_cam, reward, done, None
-   
+
     def cleanup(self):
         for actor in self.actors:
             actor.destroy()
@@ -233,7 +233,7 @@ def train_PPO(host,world_port):
             s = s_prime
             t+=1
             episode_reward+=reward
-       
+
         print ("Episode reward: " + str(episode_reward))
         avg_t+=t
         avg_r+=episode_reward
@@ -265,7 +265,7 @@ def train_PPO(host,world_port):
             update1 = (policy_ratio*advantage).float()
             update2 = (torch.clamp(policy_ratio,1-clip_val, 1+clip_val) * advantage).float()
             loss = -torch.min(update1,update2) + 0.5*mse(state_values.float(),rewards.float()) - 0.001*entropies
-            
+
             optimizer.zero_grad()
             loss.mean().backward()
             optimizer.step()
@@ -289,4 +289,3 @@ if __name__ == '__main__':
     parser.add_argument('--n_vehicles', type=int, default=1)
 
     main(**vars(parser.parse_args()))
-
