@@ -6,6 +6,7 @@ import logging
 import time
 import math
 import random
+from sklearn.neighbors import KDTree
 import sys
 #IK this is bad, fix file path stuff later :(
 sys.path.append("/scratch/cluster/stephane/Carla_0.9.10/PythonAPI/carla/agents/navigation")
@@ -32,6 +33,8 @@ class CarEnv:
 
         self.blueprint_lib = self.world.get_blueprint_library()
         self.car_agent_model = self.blueprint_lib.filter("model3")[0]
+
+        self.command2onehot = {"LEFT":[0,0,0,0,0,1], "RIGHT":[0,0,0,0,1,0], "STRAIGHT":[0,0,0,1,0,0],"LANEFOLLOW":[0,0,1,0,0,0],"CHANGELANELEFT":[0,1,0,0,0,0],"CHANGELANERIGHT":[1,0,0,0,0,0]}
 
     def process_img(self,img):
         img = np.array(img.raw_data).reshape(height,width,4)
@@ -62,7 +65,7 @@ class CarEnv:
         col_sensor = self.blueprint_lib.find("sensor.other.collision")
         self.col_sensor = self.world.spawn_actor(col_sensor,sensor_pos,attach_to=self.car_agent)
         self.actors.append(self.col_sensor)
-        self.col_sensor.listen(lambda event: self.collision_data(event))
+        self.col_sensor.listen(lambda event: self.collisions.append(event))
 
         while self.rgb_cam is None:
             print ("camera is not starting!")
@@ -74,11 +77,12 @@ class CarEnv:
 
         #create random target to reach
         self.target = random.choice(self.world.get_map().get_spawn_points())
-
+        self.get_route()
         return self.rgb_cam
 
     def step (self, action):
         self.car_agent.apply_control(carla.VehicleControl(throttle=action[0],steer=action[1]))
+        time.sleep(1)
         velocity = self.car_agent.get_velocity()
         if (len(self.collisions) != 0):
             done = True
@@ -91,7 +95,12 @@ class CarEnv:
             reward = 1
         if self.episode_start + max_ep_length < time.time():
             done = True
-        return self.rgb_cam, reward, done, None
+        closest_index = self.route_kdtree.query([[self.car_agent.get_location().x,self.car_agent.get_location().y,self.car_agent.get_location().z]],k=1)[1][0][0]
+        command_encoded = self.command2onehot.get(self.route_commands[closest_index])
+
+        velocity_mag = np.sqrt(np.power(velocity.x,2) + np.power(velocity.y,2) + np.power(velocity.z,2))
+
+        return (self.rgb_cam,command_encoded,velocity_mag), reward, done, None
 
     def cleanup(self):
         for actor in self.actors:
@@ -102,20 +111,25 @@ class CarEnv:
         dao = GlobalRoutePlannerDAO(map, 2)
         grp = GlobalRoutePlanner(dao)
         grp.setup()
-        route = grp.trace_route(self.spawn_point.location, self.target.location)
-        return route
+        route = dict(grp.trace_route(self.spawn_point.location, self.target.location))
+        
+        self.route_waypoints = []
+        self.route_commands = []
+        for waypoint in route.keys():
+            self.route_waypoints.append((waypoint.transform.location.x,waypoint.transform.location.y,waypoint.transform.location.z))
+            self.route_commands.append(route.get(waypoint))
+        self.route_kdtree = KDTree(np.array(self.route_waypoints))
 
 def run_navigation(host,world_port):
     env = CarEnv(host,world_port)
     done = False
     s = env.reset()
-    route = env.get_route()
-    print (route)
-    # while not done:
-    #     a = [0.3,0] #go straight and slow
-    #     s_prime, reward, done, info = env.step(a)
-    #
-
+    #while not done:
+    i = 0
+    while i < 5:
+        a = [1,1] #go straight and slow
+        s_prime, reward, done, info = env.step(a)
+        i+=1
     env.cleanup()
 
 
