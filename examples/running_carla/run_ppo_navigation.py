@@ -8,6 +8,9 @@ import math
 import random
 from sklearn.neighbors import KDTree
 import sys
+
+from traffic_events import TrafficEventType
+from statistics_manager import StatisticManager
 #IK this is bad, fix file path stuff later :(
 sys.path.append("/scratch/cluster/stephane/Carla_0.9.10/PythonAPI/carla/agents/navigation")
 from global_route_planner import GlobalRoutePlanner
@@ -43,8 +46,13 @@ class CarEnv:
         self.rgb_cam = rgb
 
     def reset(self):
+        self.blocked_start= 0
+        self.blocked = False
+
         self.collisions = []
         self.actors = []
+        self.events = []
+        self.followed_waypoints = []
         #spawn car randomly
         self.spawn_point = random.choice(self.world.get_map().get_spawn_points())
         self.car_agent = self.world.spawn_actor(self.car_agent_model,self.spawn_point)
@@ -65,7 +73,12 @@ class CarEnv:
         col_sensor = self.blueprint_lib.find("sensor.other.collision")
         self.col_sensor = self.world.spawn_actor(col_sensor,sensor_pos,attach_to=self.car_agent)
         self.actors.append(self.col_sensor)
-        self.col_sensor.listen(lambda event: self.collisions.append(event))
+        self.col_sensor.listen(lambda event: handle_collision(event))
+        #get obstacle sensor
+        obs_sensor = self.blueprint_lib.find("sensor.other.obstacle")
+        self.obs_sensor = self.world.spawn_actor(obs_sensor,sensor_pos,attach_to=self.car_agent)
+        self.actors.append(self.obs_sensor)
+        self.obs_sensor.listen(lambda event: handle_obstacle(event))
 
         while self.rgb_cam is None:
             print ("camera is not starting!")
@@ -78,29 +91,78 @@ class CarEnv:
         #create random target to reach
         self.target = random.choice(self.world.get_map().get_spawn_points())
         self.get_route()
+        #create statistics manager
+        self.statistics_manager = StatisticManager(self.route_waypoints)
+
         return self.rgb_cam
+
+    def handle_collision (self,event):
+        self.collisions.append(event)
+        if (event.other_actor.semantic_tags.contains("Pedestrian")):
+            self.events.append([TrafficEventType.COLLISION_PEDESTRIAN])
+        if (event.other_actor.semantic_tags.contains("Vehicles")):
+            self.events.append([TrafficEventType.COLLISION_VEHICLE])
+        if (event.other_actor.semantic_tags.contains("Static")):
+            self.events.append([TrafficEventType.COLLISION_STATIC])
+
+    def handle_obstacle(self,event):
+        if event.distance < 0.5 and self.cur_velocity == 0:
+            if self.blocked = False:
+                self.blocked = True
+                self.blocked_start = time.time()
+            else:
+                #if the car has been blocked for more that 180 seconds
+                if time.time() - self.blocked_start > 180:
+                    self.events.append([TrafficEventType.VEHICLE_BLOCKED])
+                    #reset
+                    self.blocked = False
+                    self.blocked_start = 0
+
 
     def step (self, action):
         self.car_agent.apply_control(carla.VehicleControl(throttle=action[0],steer=action[1]))
         time.sleep(1)
         velocity = self.car_agent.get_velocity()
-        if (len(self.collisions) != 0):
-            done = True
-            reward = -100
+
+        #check for traffic light infraction/stoplight infraction
+        #TODO: Right now stoplights and traffic lights are handled the same, which is incorrect
+        #https://carla.readthedocs.io/en/latest/ref_code_recipes/#traffic-light-recipe
+        if self.car_agent.is_at_traffic_light():
+            traffic_light = car_agent.get_traffic_light()
+            if traffic_light.get_state() == carla.TrafficLightState.Red and velocity > 0.2:
+                self.events.append([TrafficEventType.TRAFFIC_LIGHT_INFRACTION])
+
+        #get state information
+        closest_index = self.route_kdtree.query([[self.car_agent.get_location().x,self.car_agent.get_location().y,self.car_agent.get_location().z]],k=1)[1][0][0]
+        self.followed_waypoints.append(self.route_waypoints[closest_index])
+        command_encoded = self.command2onehot.get(self.route_commands[closest_index])
+        #d2target = np.sqrt(np.power(self.car_agent.get_location().x-self.target.location.x,2)+np.power(self.car_agent.get_location().y-self.target.location.y,2)+np.power(self.car_agent.get_location().z-self.target.location.z,2))
+        d2target = self.statistics_manager.compute_route_length(self.followed_waypoints)
+        self.d_completed = d2target
         #velocity_kmh = int(3.6*np.sqrt(np.power(velocity.x,2) + np.power(velocity.y,2) + np.power(velocity.z,2)))
-        # elif velocity_kmh < 40: #might stop car from going in circle
-        #     reward = -1
-        else:
-            done = False
-            reward = 1
+        velocity_mag = np.sqrt(np.power(velocity.x,2) + np.power(velocity.y,2) + np.power(velocity.z,2))
+        self.cur_velocity = velocity_mag
+        state = (self.rgb_cam,command_encoded,velocity_mag,d2target)
+
+        #get reward information
+        statistics_manager.compute_route_statistics(time.time(), self.events)
+        reward = statistics_manager.route_record["score_composed"] - statistics_manager.prev_score
+
+        #get done information
         if self.episode_start + max_ep_length < time.time():
             done = True
-        closest_index = self.route_kdtree.query([[self.car_agent.get_location().x,self.car_agent.get_location().y,self.car_agent.get_location().z]],k=1)[1][0][0]
-        command_encoded = self.command2onehot.get(self.route_commands[closest_index])
-        d2target = np.sqrt(np.power(self.car_agent.get_location().x-self.target.location.x,2)+np.power(self.car_agent.get_location().y-self.target.location.y,2)+np.power(self.car_agent.get_location().z-self.target.location.z,2))
-        velocity_mag = np.sqrt(np.power(velocity.x,2) + np.power(velocity.y,2) + np.power(velocity.z,2))
+            self.events.append([TrafficEventType.ROUTE_COMPLETION, self.d_completed])
+        elif d2target < 0.1:
+            done = True
+            self.events.append([TrafficEventType.ROUTE_COMPLETED])
+        else:
+            done = False
 
-        return (self.rgb_cam,command_encoded,velocity_mag,d2target), reward, done, None
+        #reset is blocked if car is moving
+        if self.cur_velocity > 0 and self.blocked = True:
+            self.blocked = False
+            self.blocked_start = 0
+        return state, reward, done, None
 
     def cleanup(self):
         for actor in self.actors:
@@ -112,7 +174,7 @@ class CarEnv:
         grp = GlobalRoutePlanner(dao)
         grp.setup()
         route = dict(grp.trace_route(self.spawn_point.location, self.target.location))
-        
+
         self.route_waypoints = []
         self.route_commands = []
         for waypoint in route.keys():
