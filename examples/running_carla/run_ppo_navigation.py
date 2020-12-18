@@ -1,14 +1,16 @@
 import numpy as np
 import cv2
 import carla
-import planner
 import argparse
 import logging
 import time
 import math
 import random
-from agents.navigation.global_route_planner import GlobalRoutePlanner
-from agents.navigation.global_route_planner_dao import GlobalRoutePlannerDAO
+import sys
+#IK this is bad, fix file path stuff later :(
+sys.path.append("/scratch/cluster/stephane/Carla_0.9.10/PythonAPI/carla/agents/navigation")
+from global_route_planner import GlobalRoutePlanner
+from global_route_planner_dao import GlobalRoutePlannerDAO
 
 
 SHOW_PREVIEW = False
@@ -92,7 +94,7 @@ class CarEnv:
         return self.rgb_cam, reward, done, None
 
     def cleanup(self):
-        for actor in actors:
+        for actor in self.actors:
             actor.destroy()
 
     def get_route(self):
@@ -100,7 +102,7 @@ class CarEnv:
         dao = GlobalRoutePlannerDAO(map, 2)
         grp = GlobalRoutePlanner(dao)
         grp.setup()
-        route = grp.trace_route(self.spawn_point, self.target)
+        route = grp.trace_route(self.spawn_point.location, self.target.location)
         return route
 
 def run_navigation(host,world_port):

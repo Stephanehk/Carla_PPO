@@ -26,7 +26,7 @@ sleep 30
 
 BODY = """
 cd {target_dir}
-python3 run_ppo.py --world_port $WORLD_PORT --tm_port $TM_PORT --n_vehicles {n_vehicles}
+python3 run_ppo_navigation.py --world_port $WORLD_PORT --tm_port $TM_PORT --n_vehicles {n_vehicles}
 """
 
 FOOTER = """
