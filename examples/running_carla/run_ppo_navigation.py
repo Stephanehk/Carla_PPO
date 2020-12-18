@@ -97,10 +97,10 @@ class CarEnv:
             done = True
         closest_index = self.route_kdtree.query([[self.car_agent.get_location().x,self.car_agent.get_location().y,self.car_agent.get_location().z]],k=1)[1][0][0]
         command_encoded = self.command2onehot.get(self.route_commands[closest_index])
-
+        d2target = np.sqrt(np.power(self.car_agent.get_location().x-self.target.location.x,2)+np.power(self.car_agent.get_location().y-self.target.location.y,2)+np.power(self.car_agent.get_location().z-self.target.location.z,2))
         velocity_mag = np.sqrt(np.power(velocity.x,2) + np.power(velocity.y,2) + np.power(velocity.z,2))
 
-        return (self.rgb_cam,command_encoded,velocity_mag), reward, done, None
+        return (self.rgb_cam,command_encoded,velocity_mag,d2target), reward, done, None
 
     def cleanup(self):
         for actor in self.actors:
