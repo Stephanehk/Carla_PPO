@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "run_ppo_navigation.py", line 418, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo_navigation.py", line 407, in main
+    train_PPO(host,world_port)
+  File "run_ppo_navigation.py", line 349, in train_PPO
+    s_prime, reward, done, info = env.step(a.detach().tolist())
+  File "run_ppo_navigation.py", line 148, in step
+    state.extend(command_encoded)
+TypeError: 'NoneType' object is not iterable

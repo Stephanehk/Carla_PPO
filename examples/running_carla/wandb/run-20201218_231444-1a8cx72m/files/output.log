@@ -1,0 +1,124 @@
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+[0, 0, 1, 0, 0, 0]
+RoadOption.LANEFOLLOW
+Episode reward: -5.312554106793316e-17
+Percept compleyed: 0.9711434928903127
+Traceback (most recent call last):
+  File "run_ppo_navigation.py", line 422, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo_navigation.py", line 411, in main
+    train_PPO(host,world_port)
+  File "run_ppo_navigation.py", line 389, in train_PPO
+    current_action_log_probs, state_values, entropies = policy.get_training_params(states,actions)
+  File "run_ppo_navigation.py", line 276, in get_training_params
+    state = torch.stack(state)
+TypeError: expected Tensor as element 0 in argument 0, but got list

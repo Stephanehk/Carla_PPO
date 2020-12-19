@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "run_ppo_navigation.py", line 418, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo_navigation.py", line 407, in main
+    train_PPO(host,world_port)
+  File "run_ppo_navigation.py", line 349, in train_PPO
+    s_prime, reward, done, info = env.step(a.detach())
+  File "run_ppo_navigation.py", line 132, in step
+    self.car_agent.apply_control(carla.VehicleControl(throttle=action[0],steer=action[1]))
+IndexError: index 1 is out of bounds for dimension 0 with size 1

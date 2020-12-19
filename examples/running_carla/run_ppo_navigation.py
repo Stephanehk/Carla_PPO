@@ -42,7 +42,7 @@ class CarEnv:
         self.blueprint_lib = self.world.get_blueprint_library()
         self.car_agent_model = self.blueprint_lib.filter("model3")[0]
 
-        self.command2onehot = {"LEFT":[0,0,0,0,0,1], "RIGHT":[0,0,0,0,1,0], "STRAIGHT":[0,0,0,1,0,0],"LANEFOLLOW":[0,0,1,0,0,0],"CHANGELANELEFT":[0,1,0,0,0,0],"CHANGELANERIGHT":[1,0,0,0,0,0]}
+        self.command2onehot = {"RoadOption.LEFT":[0,0,0,0,0,1], "RoadOption.RIGHT":[0,0,0,0,1,0], "RoadOption.STRAIGHT":[0,0,0,1,0,0],"RoadOption.LANEFOLLOW":[0,0,1,0,0,0],"RoadOption.CHANGELANELEFT":[0,1,0,0,0,0],"RoadOption.CHANGELANERIGHT":[1,0,0,0,0,0]}
 
     def process_img(self,img):
         img = np.array(img.raw_data).reshape(height,width,4)
@@ -99,7 +99,7 @@ class CarEnv:
         #create statistics manager
         self.statistics_manager = StatisticManager(self.route_waypoints)
 
-        return self.rgb_cam
+        return [self.rgb_cam,0,0,0,0,0,0,0,0]
 
     def handle_collision (self,event):
         self.collisions.append(event)
@@ -129,14 +129,18 @@ class CarEnv:
 
 
     def step (self, action):
-        self.car_agent.apply_control(carla.VehicleControl(throttle=action[0],steer=action[1]))
+        self.car_agent.apply_control(carla.VehicleControl(throttle=action[0][0],steer=action[0][1]))
         time.sleep(1)
         velocity = self.car_agent.get_velocity()
 
         #get state information
         closest_index = self.route_kdtree.query([[self.car_agent.get_location().x,self.car_agent.get_location().y,self.car_agent.get_location().z]],k=1)[1][0][0]
         self.followed_waypoints.append(self.route_waypoints[closest_index])
-        command_encoded = self.command2onehot.get(self.route_commands[closest_index])
+        command_encoded = self.command2onehot.get(str(self.route_commands[closest_index]))
+        
+        print (command_encoded)
+        print (str(self.route_commands[closest_index]))
+
         #d2target = np.sqrt(np.power(self.car_agent.get_location().x-self.target.location.x,2)+np.power(self.car_agent.get_location().y-self.target.location.y,2)+np.power(self.car_agent.get_location().z-self.target.location.z,2))
         d2target = self.statistics_manager.route_record["route_length"] - self.statistics_manager.compute_route_length(self.followed_waypoints)
         self.d_completed = d2target
@@ -240,16 +244,17 @@ class PPO_Agent(nn.Module):
         self.action_var = torch.full((action_dim,), action_std*action_std).to(device)
 
     def actor(self,state):
-        frame = state[0]
-        measurements = state[1]
+        frame = state[0].to(device)
+        measurements = state[1].to(device)
         measurements = measurements.unsqueeze(0)
         vec = self.actorConv(frame)
         X = torch.cat((vec,measurements),1)
         return self.actorLin(X)
 
     def critic(self,state):
-        frame = state[0]
-        measurements = state[1]
+        frame = state[0].to(device)
+        measurements = state[1].to(device)
+        measurements = measurements.unsqueeze(0)
         vec = self.criticConv(frame)
         X = torch.cat((vec,measurements),0)
         return self.criticLin(X)
@@ -318,7 +323,10 @@ def train_PPO(host,world_port):
     action_std = 0.5 #maybe try some other values for this
     #init models
     policy = PPO_Agent(n_states, n_actions, action_std).to(device)
-    policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
+    
+    #policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
+    #FileNotFoundError
+
     optimizer = Adam(policy.parameters(), lr=lr)
     mse = nn.MSELoss()
 
@@ -341,8 +349,8 @@ def train_PPO(host,world_port):
         states_p = []
         while not done:
             #env.render()
-            a, a_log_prob = prev_policy.choose_action(format_(s).to(device))
-            s_prime, reward, done, info = env.step(a.detach())
+            a, a_log_prob = prev_policy.choose_action(format_(s))
+            s_prime, reward, done, info = env.step(a.detach().tolist())
 
             states.append(format_(s))
             actions.append(a)
@@ -400,7 +408,7 @@ def train_PPO(host,world_port):
 
 
 def main(n_vehicles,host,world_port,tm_port):
-    run_navigation(host,world_port)
+    train_PPO(host,world_port)
 
 if __name__ == '__main__':
     import argparse

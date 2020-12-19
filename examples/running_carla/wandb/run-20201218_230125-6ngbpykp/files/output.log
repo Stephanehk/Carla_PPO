@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "run_ppo_navigation.py", line 418, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo_navigation.py", line 407, in main
+    train_PPO(host,world_port)
+  File "run_ppo_navigation.py", line 349, in train_PPO
+    s_prime, reward, done, info = env.step(a.detach())
+  File "run_ppo_navigation.py", line 132, in step
+    self.car_agent.apply_control(carla.VehicleControl(throttle=action[0][0],steer=action[0][1]))
+Boost.Python.ArgumentError: Python argument types in
+    VehicleControl.__init__(VehicleControl)
+did not match C++ signature:
+    __init__(_object*, float throttle=0.0, float steer=0.0, float brake=0.0, bool hand_brake=False, bool reverse=False, bool manual_gear_shift=False, int gear=0)
+    __init__(_object*)
