@@ -73,12 +73,12 @@ class CarEnv:
         col_sensor = self.blueprint_lib.find("sensor.other.collision")
         self.col_sensor = self.world.spawn_actor(col_sensor,sensor_pos,attach_to=self.car_agent)
         self.actors.append(self.col_sensor)
-        self.col_sensor.listen(lambda event: handle_collision(event))
+        self.col_sensor.listen(lambda event: self.handle_collision(event))
         #get obstacle sensor
         obs_sensor = self.blueprint_lib.find("sensor.other.obstacle")
         self.obs_sensor = self.world.spawn_actor(obs_sensor,sensor_pos,attach_to=self.car_agent)
         self.actors.append(self.obs_sensor)
-        self.obs_sensor.listen(lambda event: handle_obstacle(event))
+        self.obs_sensor.listen(lambda event: self.handle_obstacle(event))
 
         while self.rgb_cam is None:
             print ("camera is not starting!")
@@ -98,16 +98,20 @@ class CarEnv:
 
     def handle_collision (self,event):
         self.collisions.append(event)
-        if (event.other_actor.semantic_tags.contains("Pedestrian")):
+        #print (event)
+        #print (event.other_actor)
+        #print (event.other_actor.type_id)
+        #print (event.other_actor.semantic_tags)
+        if ("pedestrian" in event.other_actor.type_id):
             self.events.append([TrafficEventType.COLLISION_PEDESTRIAN])
-        if (event.other_actor.semantic_tags.contains("Vehicles")):
+        if ("vehicle" in event.other_actor.type_id):
             self.events.append([TrafficEventType.COLLISION_VEHICLE])
-        if (event.other_actor.semantic_tags.contains("Static")):
+        if ("static" in event.other_actor.type_id):
             self.events.append([TrafficEventType.COLLISION_STATIC])
 
     def handle_obstacle(self,event):
         if event.distance < 0.5 and self.cur_velocity == 0:
-            if self.blocked = False:
+            if self.blocked == False:
                 self.blocked = True
                 self.blocked_start = time.time()
             else:
@@ -137,16 +141,12 @@ class CarEnv:
         self.followed_waypoints.append(self.route_waypoints[closest_index])
         command_encoded = self.command2onehot.get(self.route_commands[closest_index])
         #d2target = np.sqrt(np.power(self.car_agent.get_location().x-self.target.location.x,2)+np.power(self.car_agent.get_location().y-self.target.location.y,2)+np.power(self.car_agent.get_location().z-self.target.location.z,2))
-        d2target = self.statistics_manager.compute_route_length(self.followed_waypoints)
+        d2target = self.statistics_manager.route_record["route_length"] - self.statistics_manager.compute_route_length(self.followed_waypoints)
         self.d_completed = d2target
         #velocity_kmh = int(3.6*np.sqrt(np.power(velocity.x,2) + np.power(velocity.y,2) + np.power(velocity.z,2)))
         velocity_mag = np.sqrt(np.power(velocity.x,2) + np.power(velocity.y,2) + np.power(velocity.z,2))
         self.cur_velocity = velocity_mag
         state = (self.rgb_cam,command_encoded,velocity_mag,d2target)
-
-        #get reward information
-        statistics_manager.compute_route_statistics(time.time(), self.events)
-        reward = statistics_manager.route_record["score_composed"] - statistics_manager.prev_score
 
         #get done information
         if self.episode_start + max_ep_length < time.time():
@@ -157,9 +157,16 @@ class CarEnv:
             self.events.append([TrafficEventType.ROUTE_COMPLETED])
         else:
             done = False
-
+            self.events.append([TrafficEventType.ROUTE_COMPLETION, self.d_completed])
+        
+        #get reward information
+        self.statistics_manager.compute_route_statistics(time.time(), self.events)
+        reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
+        self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
+        #print ("distance 2 target:")
+        #print (d2target)
         #reset is blocked if car is moving
-        if self.cur_velocity > 0 and self.blocked = True:
+        if self.cur_velocity > 0 and self.blocked == True:
             self.blocked = False
             self.blocked_start = 0
         return state, reward, done, None
@@ -186,12 +193,17 @@ def run_navigation(host,world_port):
     env = CarEnv(host,world_port)
     done = False
     s = env.reset()
-    #while not done:
-    i = 0
-    while i < 5:
+   
+    rewards = []
+    while not done:
         a = [1,1] #go straight and slow
         s_prime, reward, done, info = env.step(a)
-        i+=1
+        rewards.append(reward)
+
+    #print (len(env.events))
+    print (rewards)
+    #for e in env.events:
+    #    print (e)
     env.cleanup()
 
 
