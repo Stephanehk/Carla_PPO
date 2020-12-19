@@ -128,14 +128,6 @@ class CarEnv:
         time.sleep(1)
         velocity = self.car_agent.get_velocity()
 
-        #check for traffic light infraction/stoplight infraction
-        #TODO: Right now stoplights and traffic lights are handled the same, which is incorrect
-        #https://carla.readthedocs.io/en/latest/ref_code_recipes/#traffic-light-recipe
-        if self.car_agent.is_at_traffic_light():
-            traffic_light = car_agent.get_traffic_light()
-            if traffic_light.get_state() == carla.TrafficLightState.Red and velocity > 0.2:
-                self.events.append([TrafficEventType.TRAFFIC_LIGHT_INFRACTION])
-
         #get state information
         closest_index = self.route_kdtree.query([[self.car_agent.get_location().x,self.car_agent.get_location().y,self.car_agent.get_location().z]],k=1)[1][0][0]
         self.followed_waypoints.append(self.route_waypoints[closest_index])
@@ -147,6 +139,14 @@ class CarEnv:
         velocity_mag = np.sqrt(np.power(velocity.x,2) + np.power(velocity.y,2) + np.power(velocity.z,2))
         self.cur_velocity = velocity_mag
         state = (self.rgb_cam,command_encoded,velocity_mag,d2target)
+
+        #check for traffic light infraction/stoplight infraction
+        #TODO: Right now stoplights and traffic lights are handled the same, which is incorrect
+        #https://carla.readthedocs.io/en/latest/ref_code_recipes/#traffic-light-recipe
+        if self.car_agent.is_at_traffic_light():
+            traffic_light = self.car_agent.get_traffic_light()
+            if traffic_light.get_state() == carla.TrafficLightState.Red and velocity_mag > 0.2:
+                self.events.append([TrafficEventType.TRAFFIC_LIGHT_INFRACTION])
 
         #get done information
         if self.episode_start + max_ep_length < time.time():
