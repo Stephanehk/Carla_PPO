@@ -137,7 +137,7 @@ class CarEnv:
         closest_index = self.route_kdtree.query([[self.car_agent.get_location().x,self.car_agent.get_location().y,self.car_agent.get_location().z]],k=1)[1][0][0]
         self.followed_waypoints.append(self.route_waypoints[closest_index])
         command_encoded = self.command2onehot.get(str(self.route_commands[closest_index]))
-        
+
         print (command_encoded)
         print (str(self.route_commands[closest_index]))
 
@@ -243,60 +243,73 @@ class PPO_Agent(nn.Module):
                 )
         self.action_var = torch.full((action_dim,), action_std*action_std).to(device)
 
-    def actor(self,state):
-        frame = state[0].to(device)
-        measurements = state[1].to(device)
-        measurements = measurements.unsqueeze(0)
+    def actor(self,frame,mes):
+        frame = frame.to(device)
+        mes = mes.to(device)
+        mes = mes.unsqueeze(0)
         vec = self.actorConv(frame)
-        X = torch.cat((vec,measurements),1)
+        X = torch.cat((vec,mes),1)
         return self.actorLin(X)
 
-    def critic(self,state):
-        frame = state[0].to(device)
-        measurements = state[1].to(device)
-        measurements = measurements.unsqueeze(0)
+    def critic(self,frame,mes):
+        frame = frame.to(device)
+        mes = mes.to(device)
+        mes = mes.unsqueeze(0)
         vec = self.criticConv(frame)
-        X = torch.cat((vec,measurements),0)
+        X = torch.cat((vec,mes),1)
         return self.criticLin(X)
 
-    def choose_action(self,state):
+    def choose_action(self,frame,mes):
         #state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         #state = torch.FloatTensor(state).to(device)
-        mean = self.actor(state)
+        mean = self.actor(frame,mes)
         cov_matrix = torch.diag(self.action_var)
         gauss_dist = MultivariateNormal(mean,cov_matrix)
         action = gauss_dist.sample()
         action_log_prob = gauss_dist.log_prob(action)
         return action, action_log_prob
 
-    def get_training_params(self, state, action):
+    def get_training_params(self,frame,mes, action):
         #state = state.to(device)
         #action = action.to(device)
 
-        state = torch.stack(state)
-        if len(list(state.size())) > 4:
-            state = torch.squeeze(state)
-        elif len(list(state.size())) == 3:
-            state = state.unsqueeze(0)
+        frame = torch.stack(frame)
+        mes = torch.stack(mes)
+        if len(list(frame.size())) > 4:
+            frame = torch.squeeze(frame)
+            mes = torch.squeeze(mes)
+        elif len(list(frame.size())) == 3:
+            frame = frame.unsqueeze(0)
+            mes = mes.unsqueeze(0)
         action = torch.stack(action)
 
-        mean = self.actor(state)
+        mean = self.actor(frame,mes)
         action_expanded = self.action_var.expand_as(mean)
         cov_matrix = torch.diag_embed(action_expanded).to(device)
 
         gauss_dist = MultivariateNormal(mean,cov_matrix)
         action_log_prob = gauss_dist.log_prob(action).to(device)
         entropy = gauss_dist.entropy().to(device)
-        state_value = torch.squeeze(self.critic(state)).to(device)
+        state_value = torch.squeeze(self.critic(frame,mes)).to(device)
         return action_log_prob, state_value, entropy
 
-def format_(state):
-    frame = torch.FloatTensor(state[0])
+# def format_(state):
+#     frame = torch.FloatTensor(state[0])
+#     h,w,c = frame.shape
+#     frame = frame.unsqueeze(0).view(1, c, h, w)
+#
+#     measurements = torch.FloatTensor(state[1:])
+#     return [frame,measurements]
+
+def format_frame(frame):
+    frame = torch.FloatTensor(frame)
     h,w,c = frame.shape
     frame = frame.unsqueeze(0).view(1, c, h, w)
+    return frame
 
-    measurements = torch.FloatTensor(state[1:])
-    return [frame,measurements]
+def format_mes(mes):
+    measurements = torch.FloatTensor(mes)
+    return mes
 
 def train_PPO(host,world_port):
     wandb.init(project='PPO_Carla_Navigation')
@@ -323,7 +336,7 @@ def train_PPO(host,world_port):
     action_std = 0.5 #maybe try some other values for this
     #init models
     policy = PPO_Agent(n_states, n_actions, action_std).to(device)
-    
+
     #policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
     #FileNotFoundError
 
@@ -349,14 +362,14 @@ def train_PPO(host,world_port):
         states_p = []
         while not done:
             #env.render()
-            a, a_log_prob = prev_policy.choose_action(format_(s))
+            a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
             s_prime, reward, done, info = env.step(a.detach().tolist())
 
-            states.append(format_(s))
+            states.append(s)
             actions.append(a)
             actions_log_probs.append(a_log_prob)
             rewards.append(reward)
-            states_p.append(format_(s_prime))
+            states_p.append(s_prime)
 
             s = s_prime
             t+=1
@@ -386,7 +399,7 @@ def train_PPO(host,world_port):
         actions_log_probs = torch.FloatTensor(actions_log_probs).to(device)
         #train PPO
         for i in range(n_epochs):
-            current_action_log_probs, state_values, entropies = policy.get_training_params(states,actions)
+            current_action_log_probs, state_values, entropies = policy.get_training_params(format_frame(state[0]),format_mes(state[1:]),actions)
 
             policy_ratio = torch.exp(current_action_log_probs - actions_log_probs.detach())
             #policy_ratio = current_action_log_probs.detach()/actions_log_probs
