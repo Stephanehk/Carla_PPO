@@ -138,8 +138,8 @@ class CarEnv:
         self.followed_waypoints.append(self.route_waypoints[closest_index])
         command_encoded = self.command2onehot.get(str(self.route_commands[closest_index]))
 
-        print (command_encoded)
-        print (str(self.route_commands[closest_index]))
+        #print (command_encoded)
+        #print (str(self.route_commands[closest_index]))
 
         #d2target = np.sqrt(np.power(self.car_agent.get_location().x-self.target.location.x,2)+np.power(self.car_agent.get_location().y-self.target.location.y,2)+np.power(self.car_agent.get_location().z-self.target.location.z,2))
         d2target = self.statistics_manager.route_record["route_length"] - self.statistics_manager.compute_route_length(self.followed_waypoints)
@@ -238,23 +238,26 @@ class PPO_Agent(nn.Module):
                 nn.Tanh(),
                 nn.Linear(64, 32),
                 nn.Tanh(),
-                nn.Linear(32, action_dim),
-                nn.Tanh()
+                nn.Linear(32, 1)
                 )
         self.action_var = torch.full((action_dim,), action_std*action_std).to(device)
 
     def actor(self,frame,mes):
         frame = frame.to(device)
         mes = mes.to(device)
-        mes = mes.unsqueeze(0)
+        if len(list(mes.size())) == 1:
+            mes = mes.unsqueeze(0)
         vec = self.actorConv(frame)
+        #print (vec.shape)
+       # print (mes.shape)
         X = torch.cat((vec,mes),1)
         return self.actorLin(X)
 
     def critic(self,frame,mes):
         frame = frame.to(device)
         mes = mes.to(device)
-        mes = mes.unsqueeze(0)
+        if len(list(mes.size())) == 1:
+            mes = mes.unsqueeze(0)
         vec = self.criticConv(frame)
         X = torch.cat((vec,mes),1)
         return self.criticLin(X)
@@ -277,12 +280,15 @@ class PPO_Agent(nn.Module):
         mes = torch.stack(mes)
         if len(list(frame.size())) > 4:
             frame = torch.squeeze(frame)
-            mes = torch.squeeze(mes)
-        elif len(list(frame.size())) == 3:
-            frame = frame.unsqueeze(0)
-            mes = mes.unsqueeze(0)
-        action = torch.stack(action)
+            #mes = torch.squeeze(mes)
+        #elif len(list(frame.size())) == 3:
+        #    frame = frame.unsqueeze(0)
 
+        if len(list(mes.size())) > 2:
+            mes = torch.squeeze(mes)
+       
+        action = torch.stack(action)
+ 
         mean = self.actor(frame,mes)
         action_expanded = self.action_var.expand_as(mean)
         cov_matrix = torch.diag_embed(action_expanded).to(device)
@@ -308,7 +314,7 @@ def format_frame(frame):
     return frame
 
 def format_mes(mes):
-    measurements = torch.FloatTensor(mes)
+    mes = torch.FloatTensor(mes)
     return mes
 
 def train_PPO(host,world_port):
@@ -356,7 +362,8 @@ def train_PPO(host,world_port):
         episode_reward = 0
         done = False
         rewards = []
-        states = []
+        eps_frames = []
+        eps_mes = []
         actions = []
         actions_log_probs = []
         states_p = []
@@ -365,7 +372,8 @@ def train_PPO(host,world_port):
             a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
             s_prime, reward, done, info = env.step(a.detach().tolist())
 
-            states.append(s)
+            eps_frames.append(format_frame(s[0]))
+            eps_mes.append(format_mes(s[1:]))
             actions.append(a)
             actions_log_probs.append(a_log_prob)
             rewards.append(reward)
@@ -387,7 +395,7 @@ def train_PPO(host,world_port):
 
         wandb.log({"episode_reward": episode_reward})
         wandb.log({"percent_completed": info[0]})
-        if (len(states) == 1):
+        if (len(eps_frames) == 1):
             continue
 
         #format reward
@@ -399,7 +407,7 @@ def train_PPO(host,world_port):
         actions_log_probs = torch.FloatTensor(actions_log_probs).to(device)
         #train PPO
         for i in range(n_epochs):
-            current_action_log_probs, state_values, entropies = policy.get_training_params(format_frame(state[0]),format_mes(state[1:]),actions)
+            current_action_log_probs, state_values, entropies = policy.get_training_params(eps_frames,eps_mes,actions)
 
             policy_ratio = torch.exp(current_action_log_probs - actions_log_probs.detach())
             #policy_ratio = current_action_log_probs.detach()/actions_log_probs

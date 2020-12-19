@@ -1,0 +1,12 @@
+Episode reward: 100.0
+Percept compleyed: 100.0
+Episode reward: 2.111846309369335e-17
+Percept compleyed: 0.9706848185938497
+Traceback (most recent call last):
+  File "run_ppo_navigation.py", line 435, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo_navigation.py", line 424, in main
+    train_PPO(host,world_port)
+  File "run_ppo_navigation.py", line 402, in train_PPO
+    current_action_log_probs, state_values, entropies = policy.get_training_params(format_frame(state[0]),format_mes(state[1:]),actions)
+NameError: name 'state' is not defined

@@ -1,0 +1,12 @@
+Episode reward: 6.118467476694162e-17
+Percept compleyed: 0.9630461371620143
+2
+[60, 8]
+Traceback (most recent call last):
+  File "run_ppo_navigation.py", line 449, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo_navigation.py", line 438, in main
+    train_PPO(host,world_port)
+  File "run_ppo_navigation.py", line 420, in train_PPO
+    advantage = rewards - state_values.detach()
+RuntimeError: The size of tensor a (60) must match the size of tensor b (2) at non-singleton dimension 1

@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "run_ppo_navigation.py", line 435, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo_navigation.py", line 424, in main
+    train_PPO(host,world_port)
+  File "run_ppo_navigation.py", line 365, in train_PPO
+    a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
+  File "run_ppo_navigation.py", line 265, in choose_action
+    mean = self.actor(frame,mes)
+  File "run_ppo_navigation.py", line 248, in actor
+    mes = mes.to(device)
+AttributeError: 'list' object has no attribute 'to'

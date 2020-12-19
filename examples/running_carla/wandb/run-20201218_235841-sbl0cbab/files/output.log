@@ -1,0 +1,10 @@
+Episode reward: -2.9311210744806736e-18
+Percept compleyed: 0.9839469928596964
+Traceback (most recent call last):
+  File "run_ppo_navigation.py", line 437, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo_navigation.py", line 426, in main
+    train_PPO(host,world_port)
+  File "run_ppo_navigation.py", line 392, in train_PPO
+    if (len(states) == 1):
+NameError: name 'states' is not defined

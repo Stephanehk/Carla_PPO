@@ -1,0 +1,16 @@
+Episode reward: 5.00986298660466e-17
+Percept compleyed: 0.9559620287659158
+torch.Size([56, 3, 80, 80])
+torch.Size([56, 8])
+Traceback (most recent call last):
+  File "run_ppo_navigation.py", line 440, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo_navigation.py", line 429, in main
+    train_PPO(host,world_port)
+  File "run_ppo_navigation.py", line 407, in train_PPO
+    current_action_log_probs, state_values, entropies = policy.get_training_params(eps_frames,eps_mes,actions)
+  File "run_ppo_navigation.py", line 289, in get_training_params
+    mean = self.actor(frame,mes)
+  File "run_ppo_navigation.py", line 251, in actor
+    X = torch.cat((vec,mes),1)
+RuntimeError: Tensors must have same number of dimensions: got 2 and 3

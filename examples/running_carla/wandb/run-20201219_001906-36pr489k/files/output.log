@@ -1,0 +1,14 @@
+torch.Size([1, 3468])
+torch.Size([1, 8])
+Traceback (most recent call last):
+  File "run_ppo_navigation.py", line 442, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo_navigation.py", line 431, in main
+    train_PPO(host,world_port)
+  File "run_ppo_navigation.py", line 371, in train_PPO
+    a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
+  File "run_ppo_navigation.py", line 267, in choose_action
+    mean = self.actor(frame,mes)
+  File "run_ppo_navigation.py", line 253, in actor
+    X = torch.cat((vec,mes),0)
+RuntimeError: Sizes of tensors must match except in dimension 0. Got 3468 and 8 in dimension 1 (The offending index is 1)

@@ -1,0 +1,31 @@
+{
+    "os": "Linux-4.15.0-112-generic-x86_64-with-Ubuntu-18.04-bionic",
+    "python": "3.6.9",
+    "heartbeatAt": "2020-12-19T06:23:36.401606",
+    "startedAt": "2020-12-19T06:23:34.695719",
+    "docker": null,
+    "gpu": "TITAN V",
+    "gpu_count": 8,
+    "cpu_count": 40,
+    "cuda": null,
+    "args": [
+        "--world_port",
+        "8171",
+        "--tm_port",
+        "8943",
+        "--n_vehicles",
+        "10"
+    ],
+    "state": "running",
+    "codePath": "examples/running_carla/run_ppo_navigation.py",
+    "program": "run_ppo_navigation.py",
+    "git": {
+        "remote": "https://github.com/Stephanehk/Carla_PPO.git",
+        "commit": "a131d1f9874b16a1421ce2f2730d936bed1676ec"
+    },
+    "email": null,
+    "root": "/scratch/cluster/stephane/cluster_quickstart",
+    "host": "titan-5",
+    "username": "stephane",
+    "executable": "/lusr/bin/python3"
+}
