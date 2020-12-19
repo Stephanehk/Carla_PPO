@@ -56,8 +56,7 @@ class StatisticManager:
                     #route_record.infractions['collisions_vehicle'].append(event.get_message())
 
                 elif event[0] == TrafficEventType.OUTSIDE_ROUTE_LANES_INFRACTION:
-                    pass
-                    #score_penalty *= (1 - percentage bla bla)
+                    score_penalty *= (1 - event[1])
                     #route_record.infractions['outside_route_lanes'].append(event.get_message())
 
                 elif event[0] == TrafficEventType.TRAFFIC_LIGHT_INFRACTION:

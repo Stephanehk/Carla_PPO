@@ -13,9 +13,7 @@ import torch.nn as nn
 from torch.optim import Adam
 from torch.distributions import MultivariateNormal
 import wandb
-print ("finished importing most things")
 from shapely.geometry import LineString
-print ("now importing shapely")
 from traffic_events import TrafficEventType
 from statistics_manager import StatisticManager
 #IK this is bad, fix file path stuff later :(
@@ -56,10 +54,22 @@ class CarEnv:
         self._affected_by_stop = False
         self.stop_actual_value = 0
         self.light_actual_value = 0
+        self._outside_lane_active = False
+        self._wrong_lane_active = False
+        self._last_road_id = None
+        self._last_lane_id = None
+        self._total_distance = 0
+        self._wrong_distance = 0
+        self._current_index = 0
         self.DISTANCE_LIGHT = 15
         self.PROXIMITY_THRESHOLD = 50.0  # meters
         self.SPEED_THRESHOLD = 0.1
         self.WAYPOINT_STEP = 1.0  # meters
+        self.ALLOWED_OUT_DISTANCE = 1.3          # At least 0.5, due to the mini-shoulder between lanes and sidewalks
+        self.MAX_ALLOWED_VEHICLE_ANGLE = 120.0   # Maximum angle between the yaw and waypoint lane
+        self.MAX_ALLOWED_WAYPOINT_ANGLE = 150.0  # Maximum change between the yaw-lane angle between frames
+        self.WINDOWS_SIZE = 3 # Amount of additional waypoints checked (in case the first on fails)
+
         all_actors = self.world.get_actors()
         for _actor in all_actors:
             if 'traffic_light' in _actor.type_id:
@@ -169,7 +179,8 @@ class CarEnv:
         self.get_route()
         #create statistics manager
         self.statistics_manager = StatisticManager(self.route_waypoints)
-
+        #get all initial waypoints
+        self._pre_ego_waypoint = self._map.get_waypoint(self.car_agent.get_location())
         return [self.rgb_cam,0,0,0,0,0,0,0,0]
 
     def handle_collision (self,event):
@@ -286,6 +297,79 @@ class CarEnv:
 
         return target_stop_sign
 
+    def _is_outside_driving_lanes(self, location):
+        """
+        Detects if the ego_vehicle is outside driving lanes
+        """
+
+        current_driving_wp = self._map.get_waypoint(location, lane_type=carla.LaneType.Driving, project_to_road=True)
+        current_parking_wp = self._map.get_waypoint(location, lane_type=carla.LaneType.Parking, project_to_road=True)
+
+        driving_distance = location.distance(current_driving_wp.transform.location)
+        if current_parking_wp is not None:  # Some towns have no parking
+            parking_distance = location.distance(current_parking_wp.transform.location)
+        else:
+            parking_distance = float('inf')
+
+        if driving_distance >= parking_distance:
+            distance = parking_distance
+            lane_width = current_parking_wp.lane_width
+        else:
+            distance = driving_distance
+            lane_width = current_driving_wp.lane_width
+
+        self._outside_lane_active = bool(distance > (lane_width / 2 + self.ALLOWED_OUT_DISTANCE))
+
+    def _is_at_wrong_lane(self, location):
+        """
+        Detects if the ego_vehicle has invaded a wrong lane
+        """
+
+        current_waypoint = self._map.get_waypoint(location, lane_type=carla.LaneType.Driving, project_to_road=True)
+        current_lane_id = current_waypoint.lane_id
+        current_road_id = current_waypoint.road_id
+
+        # Lanes and roads are too chaotic at junctions
+        if current_waypoint.is_junction:
+            self._wrong_lane_active = False
+        elif self._last_road_id != current_road_id or self._last_lane_id != current_lane_id:
+
+            # Route direction can be considered continuous, except after exiting a junction.
+            if self._pre_ego_waypoint.is_junction:
+                yaw_waypt = current_waypoint.transform.rotation.yaw % 360
+                yaw_actor = self.car_agent.get_transform().rotation.yaw % 360
+
+                vehicle_lane_angle = (yaw_waypt - yaw_actor) % 360
+
+                if vehicle_lane_angle < self.MAX_ALLOWED_VEHICLE_ANGLE \
+                        or vehicle_lane_angle > (360 - self.MAX_ALLOWED_VEHICLE_ANGLE):
+                    self._wrong_lane_active = False
+                else:
+                    self._wrong_lane_active = True
+
+            else:
+                # Check for a big gap in waypoint directions.
+                yaw_pre_wp = self._pre_ego_waypoint.transform.rotation.yaw % 360
+                yaw_cur_wp = current_waypoint.transform.rotation.yaw % 360
+
+                waypoint_angle = (yaw_pre_wp - yaw_cur_wp) % 360
+
+                if waypoint_angle >= self.MAX_ALLOWED_WAYPOINT_ANGLE \
+                        and waypoint_angle <= (360 - self.MAX_ALLOWED_WAYPOINT_ANGLE):
+
+                    # Is the ego vehicle going back to the lane, or going out? Take the opposite
+                    self._wrong_lane_active = not bool(self._wrong_lane_active)
+                else:
+
+                    # Changing to a lane with the same direction
+                    self._wrong_lane_active = False
+
+        # Remember the last state
+        self._last_lane_id = current_lane_id
+        self._last_road_id = current_road_id
+        self._pre_ego_waypoint = current_waypoint
+
+
     def check_traffic_light_infraction (self):
         transform = self.car_agent.get_transform()
         location = transform.location
@@ -368,6 +452,43 @@ class CarEnv:
                 self._stop_completed = False
                 self._affected_by_stop = False
 
+    def check_outside_route_lane (self):
+        self.test_status = None
+        _waypoints = self.route_waypoints #not sure if this is correct
+        _route_length = len(self.route_waypoints)
+        location = self.car_agent.get_location()
+         # 1) Check if outside route lanes
+        self._is_outside_driving_lanes(location)
+        self._is_at_wrong_lane(location)
+        if self._outside_lane_active or self._wrong_lane_active:
+            self.test_status = "FAILURE"
+        # 2) Get the traveled distance
+        for index in range(self._current_index + 1,
+                           min(self._current_index + self.WINDOWS_SIZE + 1, _route_length)):
+            # Get the dot product to know if it has passed this location
+            index_location = _waypoints[index]
+            index_waypoint = self._map.get_waypoint(index_location)
+
+            wp_dir = index_waypoint.transform.get_forward_vector()  # Waypoint's forward vector
+            wp_veh = location - index_location  # vector waypoint - vehicle
+            dot_ve_wp = wp_veh.x * wp_dir.x + wp_veh.y * wp_dir.y + wp_veh.z * wp_dir.z
+
+            if dot_ve_wp > 0:
+                # Get the distance traveled
+                index_location = _waypoints[index]
+                current_index_location = _waypoints[self._current_index]
+                new_dist = current_index_location.distance(index_location)
+
+                # Add it to the total distance
+                self._current_index = index
+                self._total_distance += new_dist
+
+                # And to the wrong one if outside route lanes
+                if self._outside_lane_active or self._wrong_lane_active:
+                    self._wrong_distance += new_dist
+        if self.test_status = "FAILURE":
+            self.events.append([TrafficEventType.OUTSIDE_ROUTE_LANES_INFRACTION,self._wrong_distance / self._total_distance * 100])
+
     def step (self, action):
         self.car_agent.apply_control(carla.VehicleControl(throttle=action[0][0],steer=action[0][1]))
         time.sleep(1)
@@ -388,17 +509,10 @@ class CarEnv:
         state.extend(command_encoded)
 
         #check for traffic light infraction/stoplight infraction
-        #print ("checking traffic light infractions")
         self.check_traffic_light_infraction()
-        #print ("finished, checking stop light infractions")
         self.check_stop_sign_infraction()
-        #print ("finished")
-        #TODO: Right now stoplights and traffic lights are handled the same, which is incorrect
-        #https://carla.readthedocs.io/en/latest/ref_code_recipes/#traffic-light-recipe
-        # if self.car_agent.is_at_traffic_light():
-        #     traffic_light = self.car_agent.get_traffic_light()
-        #     if traffic_light.get_state() == carla.TrafficLightState.Red and velocity_mag > 0.2:
-        #         self.events.append([TrafficEventType.TRAFFIC_LIGHT_INFRACTION])
+        #check if the vehicle is either on a sidewalk or at a wrong lane.
+        self.check_outside_route_lane()
 
         #get done information
         if self.episode_start + max_ep_length < time.time():
