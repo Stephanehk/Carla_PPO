@@ -13,8 +13,9 @@ import torch.nn as nn
 from torch.optim import Adam
 from torch.distributions import MultivariateNormal
 import wandb
-import shapely
-
+print ("finished importing most things")
+from shapely.geometry import LineString
+print ("now importing shapely")
 from traffic_events import TrafficEventType
 from statistics_manager import StatisticManager
 #IK this is bad, fix file path stuff later :(
@@ -46,7 +47,7 @@ class CarEnv:
         self.command2onehot = {"RoadOption.LEFT":[0,0,0,0,0,1], "RoadOption.RIGHT":[0,0,0,0,1,0], "RoadOption.STRAIGHT":[0,0,0,1,0,0],"RoadOption.LANEFOLLOW":[0,0,1,0,0,0],"RoadOption.CHANGELANELEFT":[0,1,0,0,0,0],"RoadOption.CHANGELANERIGHT":[1,0,0,0,0,0]}
 
         #get traffic light and stop sign info
-        self._map = world.get_map()
+        self._map = self.world.get_map()
         self._list_traffic_lights = []
         self._list_stop_signs = []
         self._last_red_light_id = None
@@ -201,8 +202,8 @@ class CarEnv:
         """
         check if vehicle crosses a line segment
         """
-        line1 = shapely.geometry.LineString([(seg1[0].x, seg1[0].y), (seg1[1].x, seg1[1].y)])
-        line2 = shapely.geometry.LineString([(seg2[0].x, seg2[0].y), (seg2[1].x, seg2[1].y)])
+        line1 = LineString([(seg1[0].x, seg1[0].y), (seg1[1].x, seg1[1].y)])
+        line2 = LineString([(seg2[0].x, seg2[0].y), (seg2[1].x, seg2[1].y)])
         inter = line1.intersection(line2)
 
         return not inter.is_empty
@@ -387,8 +388,11 @@ class CarEnv:
         state.extend(command_encoded)
 
         #check for traffic light infraction/stoplight infraction
+        #print ("checking traffic light infractions")
         self.check_traffic_light_infraction()
+        #print ("finished, checking stop light infractions")
         self.check_stop_sign_infraction()
+        #print ("finished")
         #TODO: Right now stoplights and traffic lights are handled the same, which is incorrect
         #https://carla.readthedocs.io/en/latest/ref_code_recipes/#traffic-light-recipe
         # if self.car_agent.is_at_traffic_light():
@@ -546,7 +550,6 @@ def format_mes(mes):
 
 def train_PPO(host,world_port):
     wandb.init(project='PPO_Carla_Navigation')
-
     env = CarEnv(host,world_port)
     n_iters = 1000
     n_epochs = 50
@@ -562,11 +565,10 @@ def train_PPO(host,world_port):
 
 
     n_states = 8
-
     #currently the action array will be [throttle, steer]
     n_actions = 2
 
-    action_std = 0.5 #maybe try some other values for this
+    action_std = 0.5
     #init models
     policy = PPO_Agent(n_states, n_actions, action_std).to(device)
 
@@ -577,7 +579,6 @@ def train_PPO(host,world_port):
     mse = nn.MSELoss()
 
     prev_policy = PPO_Agent(n_states, n_actions, action_std).to(device)
-    #TODO: idk if I should be setting each policies initial states to the same thing or not
     prev_policy.load_state_dict(policy.state_dict())
 
 
@@ -595,7 +596,6 @@ def train_PPO(host,world_port):
         actions_log_probs = []
         states_p = []
         while not done:
-            #env.render()
             a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
             s_prime, reward, done, info = env.step(a.detach().tolist())
 
