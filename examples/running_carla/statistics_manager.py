@@ -81,7 +81,7 @@ class StatisticManager:
                     target_reached = True
                 elif event[0] == TrafficEventType.ROUTE_COMPLETION:
                     if not target_reached:
-                        score_route = event[1]/self.route_record['route_length']
+                        score_route = (event[1]/self.route_record['route_length'])*100
                         # if event.get_dict():
                         #     score_route = event.get_dict()['route_completed']
                         # else:
