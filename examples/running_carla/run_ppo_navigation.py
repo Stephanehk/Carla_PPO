@@ -142,7 +142,12 @@ class CarEnv:
         self.followed_waypoints = []
         #spawn car randomly
         self.spawn_point = random.choice(self.world.get_map().get_spawn_points())
-        self.car_agent = self.world.spawn_actor(self.car_agent_model,self.spawn_point)
+        self.car_agent = self.world.try_spawn_actor(self.car_agent_model,self.spawn_point)
+        #handle invalid spwawn point
+        while self.car_agent == None:
+            self.spawn_point = random.choice(self.world.get_map().get_spawn_points())
+            self.car_agent = self.world.try_spawn_actor(self.car_agent_model,self.spawn_point)
+
         self.actors.append(self.car_agent)
         #get camera
         self.rgb_cam = self.blueprint_lib.find("sensor.camera.rgb")
@@ -177,12 +182,15 @@ class CarEnv:
 
         #create random target to reach
         self.target = random.choice(self.world.get_map().get_spawn_points())
+        while (self.target == self.spawn_point):
+            self.target = random.choice(self.world.get_map().get_spawn_points())
         self.get_route()
         #create statistics manager
         self.statistics_manager = StatisticManager(self.route_waypoints)
         #get all initial waypoints
         self._pre_ego_waypoint = self._map.get_waypoint(self.car_agent.get_location())
         #some metrics for debugging
+        self.colllided_w_static = False
         self.n_collisions = 0
         self.n_tafficlight_violations = 0
         self.n_stopsign_violations = 0
@@ -207,6 +215,7 @@ class CarEnv:
                 self.events.append([TrafficEventType.COLLISION_VEHICLE])
             if ("static" in event.other_actor.type_id):
                 self.events.append([TrafficEventType.COLLISION_STATIC])
+                self.colllided_w_static = True
 
     def handle_obstacle(self,event):
         if event.distance < 0.5 and self.cur_velocity == 0:
@@ -507,7 +516,7 @@ class CarEnv:
 
     def step (self, action):
         self.car_agent.apply_control(carla.VehicleControl(throttle=action[0][0],steer=action[0][1]))
-        time.sleep(1)
+        #time.sleep(1)
         velocity = self.car_agent.get_velocity()
 
         #get state information
@@ -531,7 +540,7 @@ class CarEnv:
         self.check_outside_route_lane()
 
         #get done information
-        if self.episode_start + max_ep_length < time.time():
+        if self.episode_start + max_ep_length < time.time() or self.colllided_w_static:
             done = True
             self.events.append([TrafficEventType.ROUTE_COMPLETION, self.d_completed])
         elif d2target < 0.1:
@@ -546,8 +555,12 @@ class CarEnv:
         #------------------------------------------------------------------------------------------------------------------
         reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
         self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
+        print (self.events)
+        print (reward)
+        print (self.statistics_manager.route_record["score_composed"])
+        print ("\n")
         #max(low, min(high, value))
-        reward_bounded = max(-200,min(200,reward))
+        #reward_bounded = max(-200,min(200,reward))
         #------------------------------------------------------------------------------------------------------------------
         # reward = 1000*(self.d_completed - self.statistics_manager.prev_d_completed) + 0.05*(velocity_kmh-self.statistics_manager.prev_velocity_kmh) - 10*self.statistics_manager.route_record["score_penalty"]
         # self.statistics_manager.prev_d_completed = self.d_completed
@@ -690,7 +703,7 @@ def format_mes(mes):
 def train_PPO(host,world_port):
     wandb.init(project='PPO_Carla_Navigation')
     env = CarEnv(host,world_port)
-    n_iters = 1000
+    n_iters = 10000
     n_epochs = 50
     max_steps = 2000
     gamma = 0.9
@@ -749,9 +762,15 @@ def train_PPO(host,world_port):
             s = s_prime
             t+=1
             episode_reward+=reward
+            #print (reward)
+            #print (info)
+            #print ("\n")
 
+
+        if info[0] != 100 and info[0] > 20:
+            return
         print ("Episode reward: " + str(episode_reward))
-        print ("Percept compleyed: " + str(info[0]))
+        print ("Percent completed: " + str(info[0]))
         avg_t+=t
         env.cleanup()
 
@@ -769,7 +788,7 @@ def train_PPO(host,world_port):
         wandb.log({"number_of_stopsign_violations": info[3]})
         wandb.log({"number_of_route_violations": info[4]})
         wandb.log({"number_of_times_vehicle_blocked": info[5]})
-
+        wandb.log({"timesteps before termination": t})
         if (len(eps_frames) == 1):
             continue
 
