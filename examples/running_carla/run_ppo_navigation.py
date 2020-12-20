@@ -737,7 +737,7 @@ def train_PPO(host,world_port):
         while not done:
             a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
             s_prime, reward, done, info = env.step(a.detach().tolist())
-            reward = max(-300,min(300,reward))
+            #reward = max(-3000,min(3000,reward))
 
             eps_frames.append(format_frame(s[0]))
             eps_mes.append(format_mes(s[1:]))
@@ -759,7 +759,7 @@ def train_PPO(host,world_port):
         #f.write("ran episode with reward " + str(episode_reward))
         #f.close()
         #moving_avg = (total_reward - avg_reward_arr[-1]) * (2/(len(avg_reward_arr) +1)) + avg_reward_arr[-1]
-        moving_avg = (episode_reward - moving_avg) * (2/(iters+1)) + moving_avg
+        moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
 
         wandb.log({"episode_reward": episode_reward})
         wandb.log({"average_reward": moving_avg})
