@@ -21,7 +21,6 @@ sys.path.append("/scratch/cluster/stephane/Carla_0.9.10/PythonAPI/carla/agents/n
 from global_route_planner import GlobalRoutePlanner
 from global_route_planner_dao import GlobalRoutePlannerDAO
 
-
 SHOW_PREVIEW = False
 #maybe scale these down
 height = 80
@@ -181,14 +180,18 @@ class CarEnv:
         self.statistics_manager = StatisticManager(self.route_waypoints)
         #get all initial waypoints
         self._pre_ego_waypoint = self._map.get_waypoint(self.car_agent.get_location())
+        #some metrics for debugging
+        self.n_collisions = 0
+        self.n_tafficlight_violations = 0
+        self.n_stopsign_violations = 0
+        self.n_route_violations = 0
+        self.n_vehicle_blocked = 0
+
         return [self.rgb_cam,0,0,0,0,0,0,0,0]
 
     def handle_collision (self,event):
         self.collisions.append(event)
-        #print (event)
-        #print (event.other_actor)
-        #print (event.other_actor.type_id)
-        #print (event.other_actor.semantic_tags)
+        self.n_collisions+=1
         if ("pedestrian" in event.other_actor.type_id):
             self.events.append([TrafficEventType.COLLISION_PEDESTRIAN])
         if ("vehicle" in event.other_actor.type_id):
@@ -208,6 +211,7 @@ class CarEnv:
                     #reset
                     self.blocked = False
                     self.blocked_start = 0
+                    self.n_vehicle_blocked+=1
 
     def is_vehicle_crossing_line(self, seg1, seg2):
         """
@@ -415,6 +419,7 @@ class CarEnv:
                         #red_light_event = TrafficEvent(event_type=TrafficEventType.TRAFFIC_LIGHT_INFRACTION)
                         self.events.append([TrafficEventType.TRAFFIC_LIGHT_INFRACTION])
                         self._last_red_light_id = traffic_light.id
+                        self.n_tafficlight_violations+=1
                         break
 
     def check_stop_sign_infraction (self):
@@ -446,6 +451,7 @@ class CarEnv:
                     self.stop_actual_value += 1
                     #stop_location = self._target_stop_sign.get_transform().location
                     self.events.append([TrafficEventType.STOP_INFRACTION])
+                    self.n_stopsign_violations+=1
 
                 # reset state
                 self._target_stop_sign = None
@@ -488,6 +494,7 @@ class CarEnv:
                     self._wrong_distance += new_dist
         if self.test_status == "FAILURE":
             self.events.append([TrafficEventType.OUTSIDE_ROUTE_LANES_INFRACTION,self._wrong_distance / self._total_distance * 100])
+            self.n_route_violations+=1
 
     def step (self, action):
         self.car_agent.apply_control(carla.VehicleControl(throttle=action[0][0],steer=action[0][1]))
@@ -528,19 +535,20 @@ class CarEnv:
         #get reward information
         self.statistics_manager.compute_route_statistics(time.time(), self.events)
         #------------------------------------------------------------------------------------------------------------------
-        # reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
-        # self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
+        reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
+        self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
+        #max(low, min(high, value))
+        reward_bounded = max(-200,min(200,reward))
         #------------------------------------------------------------------------------------------------------------------
-        reward = 1000*(self.d_completed - self.statistics_manager.prev_d_completed) + 0.05(velocity_kmh-self.statistics_manager.prev_velocity_kmh) - 10*self.statistics_manager.route_record["score_penalty"]
-        self.statistics_manager.prev_d_completed = self.d_completed
-        self.statistics_manager.prev_velocity_kmh = velocity_kmh
+        # reward = 1000*(self.d_completed - self.statistics_manager.prev_d_completed) + 0.05*(velocity_kmh-self.statistics_manager.prev_velocity_kmh) - 10*self.statistics_manager.route_record["score_penalty"]
+        # self.statistics_manager.prev_d_completed = self.d_completed
+        # self.statistics_manager.prev_velocity_kmh = velocity_kmh
         #------------------------------------------------------------------------------------------------------------------
-
         #reset is blocked if car is moving
         if self.cur_velocity > 0 and self.blocked == True:
             self.blocked = False
             self.blocked_start = 0
-        return state, reward, done, [self.statistics_manager.route_record['score_route']]
+        return state, reward_bounded, done, [self.statistics_manager.route_record['score_route'], self.n_collisions, self.n_tafficlight_violations,self.n_stopsign_violations,self.n_route_violations,self.n_vehicle_blocked]
 
     def cleanup(self):
         for actor in self.actors:
@@ -680,7 +688,7 @@ def train_PPO(host,world_port):
     lr = 0.0001
     clip_val = 0.2
     avg_t = 0
-    avg_r = 0
+    moving_avg = 0
 
     config = wandb.config
     config.learning_rate = lr
@@ -735,15 +743,23 @@ def train_PPO(host,world_port):
         print ("Episode reward: " + str(episode_reward))
         print ("Percept compleyed: " + str(info[0]))
         avg_t+=t
-        avg_r+=episode_reward
         env.cleanup()
 
         #f = open("output.txt","a")
         #f.write("ran episode with reward " + str(episode_reward))
         #f.close()
+        #moving_avg = (total_reward - avg_reward_arr[-1]) * (2/(len(avg_reward_arr) +1)) + avg_reward_arr[-1]
+        moving_avg = (episode_reward - moving_avg) * (2/(iters+1)) + moving_avg
 
-        wandb.log({"episode_reward_2": episode_reward})
+        wandb.log({"episode_reward": episode_reward})
+        wandb.log({"average_reward": moving_avg})
         wandb.log({"percent_completed": info[0]})
+        wandb.log({"number_of_collisions": info[1]})
+        wandb.log({"number_of_trafficlight_violations": info[2]})
+        wandb.log({"number_of_stopsign_violations": info[3]})
+        wandb.log({"number_of_route_violations": info[4]})
+        wandb.log({"number_of_times_vehicle_blocked": info[5]})
+
         if (len(eps_frames) == 1):
             continue
 
