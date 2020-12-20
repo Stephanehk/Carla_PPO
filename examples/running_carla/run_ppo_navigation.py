@@ -501,7 +501,7 @@ class CarEnv:
         #d2target = np.sqrt(np.power(self.car_agent.get_location().x-self.target.location.x,2)+np.power(self.car_agent.get_location().y-self.target.location.y,2)+np.power(self.car_agent.get_location().z-self.target.location.z,2))
         d2target = self.statistics_manager.route_record["route_length"] - self.statistics_manager.compute_route_length(self.followed_waypoints)
         self.d_completed = self.statistics_manager.compute_route_length(self.followed_waypoints)
-        #velocity_kmh = int(3.6*np.sqrt(np.power(velocity.x,2) + np.power(velocity.y,2) + np.power(velocity.z,2)))
+        velocity_kmh = int(3.6*np.sqrt(np.power(velocity.x,2) + np.power(velocity.y,2) + np.power(velocity.z,2)))
         velocity_mag = np.sqrt(np.power(velocity.x,2) + np.power(velocity.y,2) + np.power(velocity.z,2))
         self.cur_velocity = velocity_mag
 
@@ -527,8 +527,14 @@ class CarEnv:
 
         #get reward information
         self.statistics_manager.compute_route_statistics(time.time(), self.events)
-        reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
-        self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
+        #------------------------------------------------------------------------------------------------------------------
+        # reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
+        # self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
+        #------------------------------------------------------------------------------------------------------------------
+        reward = 1000*(self.d_completed - self.statistics_manager.prev_d_completed) + 0.05(velocity_kmh-self.statistics_manager.prev_velocity_kmh) - 10*self.statistics_manager.route_record["score_penalty"]
+        self.statistics_manager.prev_d_completed = self.d_completed
+        self.statistics_manager.prev_velocity_kmh = velocity_kmh
+        #------------------------------------------------------------------------------------------------------------------
 
         #reset is blocked if car is moving
         if self.cur_velocity > 0 and self.blocked == True:
@@ -736,7 +742,7 @@ def train_PPO(host,world_port):
         #f.write("ran episode with reward " + str(episode_reward))
         #f.close()
 
-        wandb.log({"episode_reward": episode_reward})
+        wandb.log({"episode_reward_2": episode_reward})
         wandb.log({"percent_completed": info[0]})
         if (len(eps_frames) == 1):
             continue

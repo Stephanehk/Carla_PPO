@@ -10,6 +10,8 @@ class StatisticManager:
         self.route_record = {}
         self.route_record['route_length'] = self.compute_route_length(trajectory)
         self.prev_score = 0
+        self.prev_d_completed = 0
+        self.prev_velocity_kmh = 0
         self.PENALTY_COLLISION_PEDESTRIAN = 0.50
         self.PENALTY_COLLISION_VEHICLE = 0.60
         self.PENALTY_COLLISION_STATIC = 0.65
