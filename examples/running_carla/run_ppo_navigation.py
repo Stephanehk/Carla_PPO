@@ -133,6 +133,8 @@ class CarEnv:
     def reset(self):
         self.blocked_start= 0
         self.blocked = False
+        self.last_col_time = 0
+        self.last_col_id = 0
 
         self.collisions = []
         self.actors = []
@@ -190,14 +192,21 @@ class CarEnv:
         return [self.rgb_cam,0,0,0,0,0,0,0,0]
 
     def handle_collision (self,event):
-        self.collisions.append(event)
-        self.n_collisions+=1
-        if ("pedestrian" in event.other_actor.type_id):
-            self.events.append([TrafficEventType.COLLISION_PEDESTRIAN])
-        if ("vehicle" in event.other_actor.type_id):
-            self.events.append([TrafficEventType.COLLISION_VEHICLE])
-        if ("static" in event.other_actor.type_id):
-            self.events.append([TrafficEventType.COLLISION_STATIC])
+        distance_vector = sefl.car_agent.get_location() - event.other_actor.get_location()
+        distance = math.sqrt(math.pow(distance_vector.x, 2) + math.pow(distance_vector.y, 2))
+
+        if distance < 5 and !(self.last_col_id == event.other_actor.id && time.time()- self.last_col_time < 1):
+            self.collisions.append(event)
+            self.n_collisions+=1
+            self.last_col_id = event.other_actor.id
+            self.last_col_time = time.time()
+            
+            if ("pedestrian" in event.other_actor.type_id):
+                self.events.append([TrafficEventType.COLLISION_PEDESTRIAN])
+            if ("vehicle" in event.other_actor.type_id):
+                self.events.append([TrafficEventType.COLLISION_VEHICLE])
+            if ("static" in event.other_actor.type_id):
+                self.events.append([TrafficEventType.COLLISION_STATIC])
 
     def handle_obstacle(self,event):
         if event.distance < 0.5 and self.cur_velocity == 0:
