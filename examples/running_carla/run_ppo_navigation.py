@@ -192,10 +192,10 @@ class CarEnv:
         return [self.rgb_cam,0,0,0,0,0,0,0,0]
 
     def handle_collision (self,event):
-        distance_vector = sefl.car_agent.get_location() - event.other_actor.get_location()
+        distance_vector = self.car_agent.get_location() - event.other_actor.get_location()
         distance = math.sqrt(math.pow(distance_vector.x, 2) + math.pow(distance_vector.y, 2))
 
-        if distance < 5 and !(self.last_col_id == event.other_actor.id && time.time()- self.last_col_time < 1):
+        if not (self.last_col_id == event.other_actor.id and time.time()- self.last_col_time < 1):
             self.collisions.append(event)
             self.n_collisions+=1
             self.last_col_id = event.other_actor.id
@@ -501,7 +501,7 @@ class CarEnv:
                 # And to the wrong one if outside route lanes
                 if self._outside_lane_active or self._wrong_lane_active:
                     self._wrong_distance += new_dist
-        if self.test_status == "FAILURE":
+        if self.test_status == "FAILURE" and self._total_distance != 0:
             self.events.append([TrafficEventType.OUTSIDE_ROUTE_LANES_INFRACTION,self._wrong_distance / self._total_distance * 100])
             self.n_route_violations+=1
 
@@ -557,7 +557,7 @@ class CarEnv:
         if self.cur_velocity > 0 and self.blocked == True:
             self.blocked = False
             self.blocked_start = 0
-        return state, reward_bounded, done, [self.statistics_manager.route_record['score_route'], self.n_collisions, self.n_tafficlight_violations,self.n_stopsign_violations,self.n_route_violations,self.n_vehicle_blocked]
+        return state, reward, done, [self.statistics_manager.route_record['score_route'], self.n_collisions, self.n_tafficlight_violations,self.n_stopsign_violations,self.n_route_violations,self.n_vehicle_blocked]
 
     def cleanup(self):
         for actor in self.actors:
@@ -737,6 +737,7 @@ def train_PPO(host,world_port):
         while not done:
             a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
             s_prime, reward, done, info = env.step(a.detach().tolist())
+            reward = max(-300,min(300,reward))
 
             eps_frames.append(format_frame(s[0]))
             eps_mes.append(format_mes(s[1:]))

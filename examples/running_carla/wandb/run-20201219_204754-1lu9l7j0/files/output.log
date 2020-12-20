@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "run_ppo_navigation.py", line 817, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo_navigation.py", line 806, in main
+    train_PPO(host,world_port)
+  File "run_ppo_navigation.py", line 739, in train_PPO
+    s_prime, reward, done, info = env.step(a.detach().tolist())
+  File "run_ppo_navigation.py", line 531, in step
+    self.check_outside_route_lane()
+  File "run_ppo_navigation.py", line 505, in check_outside_route_lane
+    self.events.append([TrafficEventType.OUTSIDE_ROUTE_LANES_INFRACTION,self._wrong_distance / self._total_distance * 100])
+ZeroDivisionError: division by zero

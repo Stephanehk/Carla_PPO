@@ -1,0 +1,1 @@
+{"episode_reward": -3.491490215845068e-18, "_step": 15, "_runtime": 138, "_timestamp": 1608430306, "average_reward": -3.491490215845069e-18, "percent_completed": 0.5707297323095393, "number_of_collisions": 1344, "number_of_trafficlight_violations": 0, "number_of_stopsign_violations": 0, "number_of_route_violations": 0, "number_of_times_vehicle_blocked": 0}

@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "run_ppo_navigation.py", line 792, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo_navigation.py", line 781, in main
+    train_PPO(host,world_port)
+  File "run_ppo_navigation.py", line 722, in train_PPO
+    s_prime, reward, done, info = env.step(a.detach().tolist())
+  File "run_ppo_navigation.py", line 534, in step
+    reward = 1000*(self.d_completed - self.statistics_manager.prev_d_completed) + 0.05(velocity_kmh-self.statistics_manager.prev_velocity_kmh) - 10*self.statistics_manager.route_record["score_penalty"]
+TypeError: 'float' object is not callable
