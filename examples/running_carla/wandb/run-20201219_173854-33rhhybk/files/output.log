@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "run_ppo_navigation.py", line 786, in <module>
+    main(**vars(parser.parse_args()))
+  File "run_ppo_navigation.py", line 775, in main
+    train_PPO(host,world_port)
+  File "run_ppo_navigation.py", line 716, in train_PPO
+    s_prime, reward, done, info = env.step(a.detach().tolist())
+  File "run_ppo_navigation.py", line 515, in step
+    self.check_outside_route_lane()
+  File "run_ppo_navigation.py", line 470, in check_outside_route_lane
+    index_waypoint = self._map.get_waypoint(index_location)
+Boost.Python.ArgumentError: Python argument types in
+    Map.get_waypoint(Map, Waypoint)
+did not match C++ signature:
+    get_waypoint(carla::client::Map {lvalue}, carla::geom::Location location, bool project_to_road=True, unsigned int lane_type=carla.libcarla.LaneType.Driving)

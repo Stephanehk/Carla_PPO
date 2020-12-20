@@ -454,7 +454,7 @@ class CarEnv:
 
     def check_outside_route_lane (self):
         self.test_status = None
-        _waypoints = self.route_waypoints #not sure if this is correct
+        _waypoints = self.route_waypoints_unformatted #not sure if this is correct
         _route_length = len(self.route_waypoints)
         location = self.car_agent.get_location()
          # 1) Check if outside route lanes
@@ -466,7 +466,7 @@ class CarEnv:
         for index in range(self._current_index + 1,
                            min(self._current_index + self.WINDOWS_SIZE + 1, _route_length)):
             # Get the dot product to know if it has passed this location
-            index_location = _waypoints[index]
+            index_location = _waypoints[index].transform.location
             index_waypoint = self._map.get_waypoint(index_location)
 
             wp_dir = index_waypoint.transform.get_forward_vector()  # Waypoint's forward vector
@@ -475,8 +475,8 @@ class CarEnv:
 
             if dot_ve_wp > 0:
                 # Get the distance traveled
-                index_location = _waypoints[index]
-                current_index_location = _waypoints[self._current_index]
+                index_location = _waypoints[index].transform.location
+                current_index_location = _waypoints[self._current_index].transform.location
                 new_dist = current_index_location.distance(index_location)
 
                 # Add it to the total distance
@@ -486,7 +486,7 @@ class CarEnv:
                 # And to the wrong one if outside route lanes
                 if self._outside_lane_active or self._wrong_lane_active:
                     self._wrong_distance += new_dist
-        if self.test_status = "FAILURE":
+        if self.test_status == "FAILURE":
             self.events.append([TrafficEventType.OUTSIDE_ROUTE_LANES_INFRACTION,self._wrong_distance / self._total_distance * 100])
 
     def step (self, action):
@@ -549,9 +549,11 @@ class CarEnv:
 
         self.route_waypoints = []
         self.route_commands = []
+        self.route_waypoints_unformatted = []
         for waypoint in route.keys():
             self.route_waypoints.append((waypoint.transform.location.x,waypoint.transform.location.y,waypoint.transform.location.z))
             self.route_commands.append(route.get(waypoint))
+            self.route_waypoints_unformatted.append(waypoint)
         self.route_kdtree = KDTree(np.array(self.route_waypoints))
 
 #device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
