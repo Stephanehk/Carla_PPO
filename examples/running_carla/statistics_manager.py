@@ -17,6 +17,8 @@ class StatisticManager:
         self.PENALTY_COLLISION_STATIC = 0.65
         self.PENALTY_TRAFFIC_LIGHT = 0.70
         self.PENALTY_STOP = 0.80
+        self.prev_route_infractions = 0
+        self.prev_route_completion = 0
 
     def compute_route_length(self, trajectory):
         route_length = 0.0
@@ -59,6 +61,8 @@ class StatisticManager:
 
                 elif event[0] == TrafficEventType.OUTSIDE_ROUTE_LANES_INFRACTION:
                     score_penalty *= (1 - (event[1]/100.0))
+                    #score_penalty *= (1 - ((event[1]/100.0)-self.prev_route_infractions))
+                    self.prev_route_infractions = (1 - (event[1]/100.0))
                     #route_record.infractions['outside_route_lanes'].append(event.get_message())
 
                 elif event[0] == TrafficEventType.TRAFFIC_LIGHT_INFRACTION:
@@ -83,15 +87,15 @@ class StatisticManager:
                 elif event[0] == TrafficEventType.ROUTE_COMPLETION:
                     if not target_reached:
                         score_route = (event[1]/self.route_record['route_length'])*100
-                        # if event.get_dict():
-                        #     score_route = event.get_dict()['route_completed']
-                        # else:
-                        #     score_route = 0
+                        #score_route = (event[1]/self.route_record['route_length'])*100 - self.prev_route_completion
+                        self.prev_route_completion = (event[1]/self.route_record['route_length'])*100
+
 
             # update route scores
             self.route_record['score_route'] = score_route
             self.route_record['score_penalty'] = score_penalty
             self.route_record['score_composed'] = max(score_route*score_penalty, 0.0)
+            self.route_record['route_percentage'] = self.prev_route_completion
 
             # update status
             if target_reached:

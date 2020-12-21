@@ -130,7 +130,14 @@ class CarEnv:
         #norm = cv2.normalize(rgb, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
         self.rgb_cam = rgb
 
-    def reset(self):
+    def reset(self, randomize):
+        if (randomize):
+            self.settings = world.get_settings()
+            self.settings.set(WeatherId=random.randrange(14))
+            self.settings.set(SendNonPlayerAgentsInfo=True,NumberOfVehicles=random.randrange(30),NumberOfPedestrians=random.randrange(30),WeatherId=random.randrange(14))
+            self.settings.randomize_seeds()
+            self.world.apply_settings(self.settings)
+
         self.blocked_start= 0
         self.blocked = False
         self.last_col_time = 0
@@ -208,7 +215,7 @@ class CarEnv:
             self.n_collisions+=1
             self.last_col_id = event.other_actor.id
             self.last_col_time = time.time()
-            
+
             if ("pedestrian" in event.other_actor.type_id):
                 self.events.append([TrafficEventType.COLLISION_PEDESTRIAN])
             if ("vehicle" in event.other_actor.type_id):
@@ -557,8 +564,6 @@ class CarEnv:
         #self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
         reward = self.statistics_manager.route_record["score_composed"]
         self.events.clear()
-        #max(low, min(high, value))
-        #reward_bounded = max(-200,min(200,reward))
         #------------------------------------------------------------------------------------------------------------------
         # reward = 1000*(self.d_completed - self.statistics_manager.prev_d_completed) + 0.05*(velocity_kmh-self.statistics_manager.prev_velocity_kmh) - 10*self.statistics_manager.route_record["score_penalty"]
         # self.statistics_manager.prev_d_completed = self.d_completed
@@ -568,7 +573,7 @@ class CarEnv:
         if self.cur_velocity > 0 and self.blocked == True:
             self.blocked = False
             self.blocked_start = 0
-        return state, reward, done, [self.statistics_manager.route_record['score_route'], self.n_collisions, self.n_tafficlight_violations,self.n_stopsign_violations,self.n_route_violations,self.n_vehicle_blocked]
+        return state, reward, done, [self.statistics_manager.route_record['route_percentage'], self.n_collisions, self.n_tafficlight_violations,self.n_stopsign_violations,self.n_route_violations,self.n_vehicle_blocked]
 
     def cleanup(self):
         for actor in self.actors:
@@ -680,14 +685,6 @@ class PPO_Agent(nn.Module):
         state_value = torch.squeeze(self.critic(frame,mes)).to(device)
         return action_log_prob, state_value, entropy
 
-# def format_(state):
-#     frame = torch.FloatTensor(state[0])
-#     h,w,c = frame.shape
-#     frame = frame.unsqueeze(0).view(1, c, h, w)
-#
-#     measurements = torch.FloatTensor(state[1:])
-#     return [frame,measurements]
-
 def format_frame(frame):
     frame = torch.FloatTensor(frame)
     h,w,c = frame.shape
@@ -722,9 +719,6 @@ def train_PPO(host,world_port):
     #init models
     policy = PPO_Agent(n_states, n_actions, action_std).to(device)
 
-    #policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
-    #FileNotFoundError
-
     optimizer = Adam(policy.parameters(), lr=lr)
     mse = nn.MSELoss()
 
@@ -735,7 +729,7 @@ def train_PPO(host,world_port):
     wandb.watch(prev_policy)
 
     for iters in range (n_iters):
-        s = env.reset()
+        s = env.reset(False)
         t = 0
         episode_reward = 0
         done = False
@@ -748,7 +742,6 @@ def train_PPO(host,world_port):
         while not done:
             a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
             s_prime, reward, done, info = env.step(a.detach().tolist())
-            #reward = max(-3000,min(3000,reward))
 
             eps_frames.append(format_frame(s[0]))
             eps_mes.append(format_mes(s[1:]))
@@ -760,10 +753,6 @@ def train_PPO(host,world_port):
             s = s_prime
             t+=1
             episode_reward+=reward
-            #print (reward)
-            #print (info)
-            #print ("\n")
-
 
         if t == 1:
             continue
@@ -771,11 +760,6 @@ def train_PPO(host,world_port):
         print ("Percent completed: " + str(info[0]))
         avg_t+=t
         env.cleanup()
-
-        #f = open("output.txt","a")
-        #f.write("ran episode with reward " + str(episode_reward))
-        #f.close()
-        #moving_avg = (total_reward - avg_reward_arr[-1]) * (2/(len(avg_reward_arr) +1)) + avg_reward_arr[-1]
         moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
 
         wandb.log({"episode_reward": episode_reward})
@@ -790,9 +774,6 @@ def train_PPO(host,world_port):
         if (len(eps_frames) == 1):
             continue
 
-        #format reward
-       # for i in range (len(rewards)):
-       #     rewards[len(rewards)-1] = rewards[len(rewards)-1]*np.power(gamma,i)
         rewards = torch.tensor(rewards).to(device)
         rewards= (rewards-rewards.mean())/rewards.std()
 
@@ -819,8 +800,53 @@ def train_PPO(host,world_port):
             torch.save(policy.state_dict(),"policy_state_dictionary.pt")
         prev_policy.load_state_dict(policy.state_dict())
 
+
+def random_baseline(host,world_port):
+    wandb.init(project='PPO_Carla_Navigation')
+    env = CarEnv(host,world_port)
+    n_iters = 10000
+    avg_t = 0
+    moving_avg = 0
+
+    config = wandb.config
+    config.learning_rate = lr
+
+
+    wandb.watch(prev_policy)
+
+    for iters in range (n_iters):
+        s = env.reset(False)
+        t = 0
+        episode_reward = 0
+        done = False
+        while not done:
+            s_prime, reward, done, info = env.step([[random.uniform(-1, 1),random.uniform(-1, 1)]])
+            t+=1
+            episode_reward+=reward
+
+        if t == 1:
+            continue
+        print ("Episode reward: " + str(episode_reward))
+        print ("Percent completed: " + str(info[0]))
+        avg_t+=t
+        env.cleanup()
+        moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
+
+        wandb.log({"episode_reward (total_score)": episode_reward})
+        wandb.log({"average_reward (total_score)": moving_avg})
+        wandb.log({"percent_completed": info[0]})
+        wandb.log({"number_of_collisions": info[1]})
+        wandb.log({"number_of_trafficlight_violations": info[2]})
+        wandb.log({"number_of_stopsign_violations": info[3]})
+        wandb.log({"number_of_route_violations": info[4]})
+        wandb.log({"number_of_times_vehicle_blocked": info[5]})
+        wandb.log({"timesteps before termination": t})
+
+
+
 def main(n_vehicles,host,world_port,tm_port):
-    train_PPO(host,world_port)
+    #train_PPO(host,world_port)
+    random_baseline(host,world_port)
 
 if __name__ == '__main__':
     import argparse
