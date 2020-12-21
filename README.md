@@ -24,6 +24,8 @@ When your job is running/done you'll be able to check out the `examples/running_
 
 ## Scripts
 `examples/running_carla/run_ppo` - PPO for collision avoidance
+
 `examples/running_carla/run_ppo_navigation` - PPO to navigate from a start point to an end point
+
 `examples/running_carla/statistics_manager` - Helper script to calculate CARLA score
 
