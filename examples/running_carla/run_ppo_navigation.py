@@ -553,12 +553,10 @@ class CarEnv:
         #get reward information
         self.statistics_manager.compute_route_statistics(time.time(), self.events)
         #------------------------------------------------------------------------------------------------------------------
-        reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
-        self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
-        print (self.events)
-        print (reward)
-        print (self.statistics_manager.route_record["score_composed"])
-        print ("\n")
+        #reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
+        #self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
+        reward = self.statistics_manager.route_record["score_composed"]
+        self.events.clear()
         #max(low, min(high, value))
         #reward_bounded = max(-200,min(200,reward))
         #------------------------------------------------------------------------------------------------------------------
@@ -767,8 +765,8 @@ def train_PPO(host,world_port):
             #print ("\n")
 
 
-        if info[0] != 100 and info[0] > 20:
-            return
+        if t == 1:
+            continue
         print ("Episode reward: " + str(episode_reward))
         print ("Percent completed: " + str(info[0]))
         avg_t+=t
@@ -793,8 +791,8 @@ def train_PPO(host,world_port):
             continue
 
         #format reward
-        for i in range (len(rewards)):
-            rewards[len(rewards)-1] = rewards[len(rewards)-1]*np.power(gamma,i)
+       # for i in range (len(rewards)):
+       #     rewards[len(rewards)-1] = rewards[len(rewards)-1]*np.power(gamma,i)
         rewards = torch.tensor(rewards).to(device)
         rewards= (rewards-rewards.mean())/rewards.std()
 
@@ -818,9 +816,8 @@ def train_PPO(host,world_port):
             #wandb.log({"loss": loss.mean()})
 
         if iters % 50 == 0:
-            prev_policy.load_state_dict(policy.state_dict())
             torch.save(policy.state_dict(),"policy_state_dictionary.pt")
-
+        prev_policy.load_state_dict(policy.state_dict())
 
 def main(n_vehicles,host,world_port,tm_port):
     train_PPO(host,world_port)
