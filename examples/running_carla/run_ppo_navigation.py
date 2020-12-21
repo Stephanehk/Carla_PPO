@@ -124,13 +124,16 @@ class CarEnv:
         y_ = math.sin(math.radians(angle)) * point.x + math.cos(math.radians(angle)) * point.y
         return carla.Vector3D(x_, y_, point.z)
 
-    def process_img(self,img):
+    def process_img(self,img, save_video):
         img = np.array(img.raw_data).reshape(height,width,4)
         rgb = img[:,:,:3]
         #norm = cv2.normalize(rgb, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
         self.rgb_cam = rgb
+        if save_video:
+            self.out.write(rgb)
 
-    def reset(self, randomize):
+
+    def reset(self, randomize, save_video, iter):
         if (randomize):
             self.settings = world.get_settings()
             self.settings.set(WeatherId=random.randrange(14))
@@ -164,7 +167,13 @@ class CarEnv:
         sensor_pos = carla.Transform(carla.Location(x=2.5,z=0.7))
         self.sensor = self.world.spawn_actor(self.rgb_cam, sensor_pos, attach_to=self.car_agent)
         self.actors.append(self.sensor)
-        self.sensor.listen(lambda data: self.process_img(data))
+        #setup record video
+        self.out = None
+        if save_video:
+            #self.cap = cv2.VideoCapture(0)
+            self.out = cv2.VideoWriter("episode_footage/output_"+str(iter)+".avi", -1, FPS, (height,width))
+
+        self.sensor.listen(lambda data: self.process_img(data,save_video))
         #workaround to get things started sooner
         self.car_agent.apply_control(carla.VehicleControl(throttle=0.0, brake=0.0))
         time.sleep(4)
@@ -578,6 +587,10 @@ class CarEnv:
     def cleanup(self):
         for actor in self.actors:
             actor.destroy()
+        #end video
+        if self.out != None:
+            self.out.release()
+            cv2.destroyAllWindows()
 
     def get_route(self):
         map = self.world.get_map()
@@ -729,7 +742,7 @@ def train_PPO(host,world_port):
     wandb.watch(prev_policy)
 
     for iters in range (n_iters):
-        s = env.reset(False)
+        s = env.reset(False,False,iters)
         t = 0
         episode_reward = 0
         done = False
@@ -754,12 +767,12 @@ def train_PPO(host,world_port):
             t+=1
             episode_reward+=reward
 
+        env.cleanup()
         if t == 1:
             continue
         print ("Episode reward: " + str(episode_reward))
         print ("Percent completed: " + str(info[0]))
         avg_t+=t
-        env.cleanup()
         moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
 
         wandb.log({"episode_reward": episode_reward})
@@ -799,6 +812,37 @@ def train_PPO(host,world_port):
         if iters % 50 == 0:
             torch.save(policy.state_dict(),"policy_state_dictionary.pt")
         prev_policy.load_state_dict(policy.state_dict())
+
+
+def run_model(host,world_port):
+    env = CarEnv(host,world_port)
+    n_iters = 10
+
+    n_states = 8
+    #currently the action array will be [throttle, steer]
+    n_actions = 2
+    action_std = 0.5
+    #init model
+    policy = PPO_Agent(n_states, n_actions, action_std).to(device)
+    policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
+    policy.eval()
+
+    for iters in range (n_iters):
+        s = env.reset(False,True,iters)
+        t = 0
+        episode_reward = 0
+        done = False
+        while not done:
+            a, a_log_prob = policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
+            s_prime, reward, done, info = env.step(a.detach().tolist())
+            s = s_prime
+            t+=1
+            episode_reward+=reward
+
+        print ("Episode reward: " + str(episode_reward))
+        print ("Percent completed: " + str(info[0]))
+        avg_t+=t
+        env.cleanup()
 
 
 def random_baseline(host,world_port):
@@ -842,11 +886,10 @@ def random_baseline(host,world_port):
         wandb.log({"number_of_times_vehicle_blocked": info[5]})
         wandb.log({"timesteps before termination": t})
 
-
-
 def main(n_vehicles,host,world_port,tm_port):
     #train_PPO(host,world_port)
-    random_baseline(host,world_port)
+    #random_baseline(host,world_port)
+    run_model(host,world_port)
 
 if __name__ == '__main__':
     import argparse
