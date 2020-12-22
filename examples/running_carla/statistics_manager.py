@@ -43,6 +43,7 @@ class StatisticManager:
             target_reached = False
             score_penalty = 1.0
             score_route = 0.0
+            route_infraction = 1
 
             self.route_record['duration'] = duration
 
@@ -59,11 +60,11 @@ class StatisticManager:
                     score_penalty *= self.PENALTY_COLLISION_VEHICLE
                     #route_record.infractions['collisions_vehicle'].append(event.get_message())
 
-                # elif event[0] == TrafficEventType.OUTSIDE_ROUTE_LANES_INFRACTION:
-                #     score_penalty *= (1 - (event[1]/100.0))
-                #     #score_penalty *= (1 - ((event[1]/100.0)-self.prev_route_infractions))
-                #     self.prev_route_infractions = (1 - (event[1]/100.0))
-                #     #route_record.infractions['outside_route_lanes'].append(event.get_message())
+                elif event[0] == TrafficEventType.OUTSIDE_ROUTE_LANES_INFRACTION:
+                    route_infraction = (1 - (event[1]/100.0))
+                    #score_penalty *= (1 - ((event[1]/100.0)-self.prev_route_infractions))
+                    self.prev_route_infractions = (1 - (event[1]/100.0))
+                    #route_record.infractions['outside_route_lanes'].append(event.get_message())
 
                 elif event[0] == TrafficEventType.TRAFFIC_LIGHT_INFRACTION:
                     score_penalty *= self.PENALTY_TRAFFIC_LIGHT
@@ -94,7 +95,7 @@ class StatisticManager:
             # update route scores
             self.route_record['score_route'] = score_route
             self.route_record['score_penalty'] = score_penalty
-            self.route_record['score_composed'] = max(score_route*score_penalty, 0.0)
+            self.route_record['score_composed'] = max(score_route*score_penalty*route_infraction, 0.0)
             self.route_record['route_percentage'] = self.prev_route_completion
 
             # update status
