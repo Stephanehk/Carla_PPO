@@ -10,6 +10,7 @@ from sklearn.neighbors import KDTree
 import sys
 import torch
 import torch.nn as nn
+from torch.distributions import Categorical
 from torch.optim import Adam
 from torch.distributions import MultivariateNormal
 import wandb
@@ -146,7 +147,6 @@ class CarEnv:
         self.blocked = False
         self.last_col_time = 0
         self.last_col_id = 0
-        self.n_step_cols = 0
 
         self.collisions = []
         self.actors = []
@@ -223,8 +223,7 @@ class CarEnv:
         distance_vector = self.car_agent.get_location() - event.other_actor.get_location()
         distance = math.sqrt(math.pow(distance_vector.x, 2) + math.pow(distance_vector.y, 2))
 
-        if not (self.last_col_id == event.other_actor.id and time.time()- self.last_col_time < 1) and self.n_step_cols < 2:
-            self.n_step_cols +=1
+        if not (self.last_col_id == event.other_actor.id and time.time()- self.last_col_time < 1):
             self.collisions.append(event)
             self.n_collisions+=1
             self.last_col_id = event.other_actor.id
@@ -412,6 +411,7 @@ class CarEnv:
         self._last_road_id = current_road_id
         self._pre_ego_waypoint = current_waypoint
 
+
     def check_traffic_light_infraction (self):
         transform = self.car_agent.get_transform()
         location = transform.location
@@ -573,10 +573,10 @@ class CarEnv:
         #get reward information
         self.statistics_manager.compute_route_statistics(time.time(), self.events)
         #------------------------------------------------------------------------------------------------------------------
-        reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
-        self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
-        #reward = self.statistics_manager.route_record["score_composed"]
-        #self.events.clear()
+        #reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
+        #self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
+        reward = self.statistics_manager.route_record["score_composed"]
+        self.events.clear()
         #------------------------------------------------------------------------------------------------------------------
         # reward = 1000*(self.d_completed - self.statistics_manager.prev_d_completed) + 0.05*(velocity_kmh-self.statistics_manager.prev_velocity_kmh) - 10*self.statistics_manager.route_record["score_penalty"]
         # self.statistics_manager.prev_d_completed = self.d_completed
@@ -586,7 +586,6 @@ class CarEnv:
         if self.cur_velocity > 0 and self.blocked == True:
             self.blocked = False
             self.blocked_start = 0
-        self.n_step_cols = 0
         return state, reward, done, [self.statistics_manager.route_record['route_percentage'], self.n_collisions, self.n_tafficlight_violations,self.n_stopsign_violations,self.n_route_violations,self.n_vehicle_blocked]
 
     def cleanup(self):
@@ -634,7 +633,7 @@ class PPO_Agent(nn.Module):
                 nn.Linear(64, 32),
                 nn.Tanh(),
                 nn.Linear(32, action_dim),
-                nn.Tanh()
+                nn.Softmax(dim=-1)
                 )
 
         self.criticConv = nn.Sequential(
@@ -676,11 +675,10 @@ class PPO_Agent(nn.Module):
     def choose_action(self,frame,mes):
         #state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         #state = torch.FloatTensor(state).to(device)
-        mean = self.actor(frame,mes)
-        cov_matrix = torch.diag(self.action_var)
-        gauss_dist = MultivariateNormal(mean,cov_matrix)
-        action = gauss_dist.sample()
-        action_log_prob = gauss_dist.log_prob(action)
+        action_prob = self.actor(frame,mes)
+        dist = Categorical(action_prob)
+        action = dist.sample()
+        action_log_prob = dist.log_prob(action)
         return action, action_log_prob
 
     def get_training_params(self,frame,mes, action):
@@ -693,14 +691,11 @@ class PPO_Agent(nn.Module):
 
         action = torch.stack(action)
 
-        mean = self.actor(frame,mes)
-        action_expanded = self.action_var.expand_as(mean)
-        cov_matrix = torch.diag_embed(action_expanded).to(device)
-
-        gauss_dist = MultivariateNormal(mean,cov_matrix)
-        action_log_prob = gauss_dist.log_prob(action).to(device)
-        entropy = gauss_dist.entropy().to(device)
-        state_value = torch.squeeze(self.critic(frame,mes)).to(device)
+        action_prob = self.actor(frame,mes)
+        dist = Categorical(action_prob)
+        action_log_prob = dist.log_prob(action)
+        entropy = dist.entropy()
+        state_value = self.critic(frame,mes)
         return action_log_prob, state_value, entropy
 
 def format_frame(frame):
@@ -780,8 +775,8 @@ def train_PPO(host,world_port):
         avg_t+=t
         moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
 
-        wandb.log({"episode_reward (suggested reward)": episode_reward})
-        wandb.log({"average_reward (suggested reward)": moving_avg})
+        wandb.log({"episode_reward": episode_reward})
+        wandb.log({"average_reward": moving_avg})
         wandb.log({"percent_completed": info[0]})
         wandb.log({"number_of_collisions": info[1]})
         wandb.log({"number_of_trafficlight_violations": info[2]})
@@ -825,7 +820,9 @@ def run_model(host,world_port):
 
     n_states = 8
     #currently the action array will be [throttle, steer]
-    n_actions = 2
+    #throttle: 0, 0.5, 1
+    #steer: -1,-0.5,0,0.5,1
+    n_actions = 8
     action_std = 0.5
     #init model
     policy = PPO_Agent(n_states, n_actions, action_std).to(device)
@@ -895,9 +892,9 @@ def random_baseline(host,world_port):
         wandb.log({"timesteps before termination": t})
 
 def main(n_vehicles,host,world_port,tm_port):
-    train_PPO(host,world_port)
+    #train_PPO(host,world_port)
     #random_baseline(host,world_port)
-    #run_model(host,world_port)
+    run_model(host,world_port)
 
 if __name__ == '__main__':
     import argparse

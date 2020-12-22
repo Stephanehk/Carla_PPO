@@ -59,11 +59,11 @@ class StatisticManager:
                     score_penalty *= self.PENALTY_COLLISION_VEHICLE
                     #route_record.infractions['collisions_vehicle'].append(event.get_message())
 
-                elif event[0] == TrafficEventType.OUTSIDE_ROUTE_LANES_INFRACTION:
-                    score_penalty *= (1 - (event[1]/100.0))
-                    #score_penalty *= (1 - ((event[1]/100.0)-self.prev_route_infractions))
-                    self.prev_route_infractions = (1 - (event[1]/100.0))
-                    #route_record.infractions['outside_route_lanes'].append(event.get_message())
+                # elif event[0] == TrafficEventType.OUTSIDE_ROUTE_LANES_INFRACTION:
+                #     score_penalty *= (1 - (event[1]/100.0))
+                #     #score_penalty *= (1 - ((event[1]/100.0)-self.prev_route_infractions))
+                #     self.prev_route_infractions = (1 - (event[1]/100.0))
+                #     #route_record.infractions['outside_route_lanes'].append(event.get_message())
 
                 elif event[0] == TrafficEventType.TRAFFIC_LIGHT_INFRACTION:
                     score_penalty *= self.PENALTY_TRAFFIC_LIGHT
