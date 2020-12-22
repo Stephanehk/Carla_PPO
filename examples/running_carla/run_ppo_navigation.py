@@ -175,7 +175,7 @@ class CarEnv:
             print ("saving video turned on")
             #self.cap = cv2.VideoCapture(0)
             fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
-            self.out = cv2.VideoWriter("episode_footage/output_"+str(iter)+".avi", fourcc,1, (height,width))
+            self.out = cv2.VideoWriter("episode_footage/output_"+str(iter)+".avi", fourcc,FPS, (height,width))
             self.n_img = 0
         self.sensor.listen(lambda data: self.process_img(data,save_video,iter))
         #workaround to get things started sooner
@@ -780,8 +780,8 @@ def train_PPO(host,world_port):
         avg_t+=t
         moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
 
-        wandb.log({"episode_reward (suggested reward)": episode_reward})
-        wandb.log({"average_reward (suggested reward)": moving_avg})
+        wandb.log({"episode_reward (suggested reward w/ ri)": episode_reward})
+        wandb.log({"average_reward (suggested reward w/ ri)": moving_avg})
         wandb.log({"percent_completed": info[0]})
         wandb.log({"number_of_collisions": info[1]})
         wandb.log({"number_of_trafficlight_violations": info[2]})
@@ -884,8 +884,8 @@ def random_baseline(host,world_port):
         env.cleanup()
         moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
 
-        wandb.log({"episode_reward (total_score)": episode_reward})
-        wandb.log({"average_reward (total_score)": moving_avg})
+        wandb.log({"episode_reward (suggested reward w/ ri)": episode_reward})
+        wandb.log({"average_reward (suggested reward w/ ri)": moving_avg})
         wandb.log({"percent_completed": info[0]})
         wandb.log({"number_of_collisions": info[1]})
         wandb.log({"number_of_trafficlight_violations": info[2]})
