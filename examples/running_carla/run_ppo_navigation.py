@@ -124,14 +124,15 @@ class CarEnv:
         y_ = math.sin(math.radians(angle)) * point.x + math.cos(math.radians(angle)) * point.y
         return carla.Vector3D(x_, y_, point.z)
 
-    def process_img(self,img, save_video):
+    def process_img(self,img,save_video,iter):
         img = np.array(img.raw_data).reshape(height,width,4)
         rgb = img[:,:,:3]
         #norm = cv2.normalize(rgb, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
         self.rgb_cam = rgb
         if save_video:
             self.out.write(rgb)
-
+            cv2.imwrite("/scratch/cluster/stephane/cluster_quickstart/examples/running_carla/episode_footage/frame_"+str(iter)+str(self.n_img)+".png",rgb)
+            self.n_img+=1
 
     def reset(self, randomize, save_video, iter):
         if (randomize):
@@ -170,10 +171,11 @@ class CarEnv:
         #setup record video
         self.out = None
         if save_video:
+            print ("saving video turned on")
             #self.cap = cv2.VideoCapture(0)
-            self.out = cv2.VideoWriter("episode_footage/output_"+str(iter)+".avi", -1, FPS, (height,width))
-
-        self.sensor.listen(lambda data: self.process_img(data,save_video))
+            self.out = cv2.VideoWriter("/scratch/cluster/stephane/cluster_quickstart/examples/running_carla/episode_footage/output_"+str(iter)+".avi", -1,1, (height,width))
+            self.n_img = 0
+        self.sensor.listen(lambda data: self.process_img(data,save_video,iter))
         #workaround to get things started sooner
         self.car_agent.apply_control(carla.VehicleControl(throttle=0.0, brake=0.0))
         time.sleep(4)
@@ -590,7 +592,7 @@ class CarEnv:
         #end video
         if self.out != None:
             self.out.release()
-            cv2.destroyAllWindows()
+            #cv2.destroyAllWindows()
 
     def get_route(self):
         map = self.world.get_map()
@@ -816,7 +818,7 @@ def train_PPO(host,world_port):
 
 def run_model(host,world_port):
     env = CarEnv(host,world_port)
-    n_iters = 10
+    n_iters = 20
 
     n_states = 8
     #currently the action array will be [throttle, steer]
@@ -841,7 +843,6 @@ def run_model(host,world_port):
 
         print ("Episode reward: " + str(episode_reward))
         print ("Percent completed: " + str(info[0]))
-        avg_t+=t
         env.cleanup()
 
 
@@ -859,7 +860,7 @@ def random_baseline(host,world_port):
     wandb.watch(prev_policy)
 
     for iters in range (n_iters):
-        s = env.reset(False)
+        s = env.reset(False,False,iters)
         t = 0
         episode_reward = 0
         done = False
