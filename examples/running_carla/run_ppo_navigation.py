@@ -131,7 +131,7 @@ class CarEnv:
         self.rgb_cam = rgb
         if save_video:
             self.out.write(rgb)
-            cv2.imwrite("/scratch/cluster/stephane/cluster_quickstart/examples/running_carla/episode_footage/frame_"+str(iter)+str(self.n_img)+".png",rgb)
+            #cv2.imwrite("/scratch/cluster/stephane/cluster_quickstart/examples/running_carla/episode_footage/frame_"+str(iter)+str(self.n_img)+".png",rgb)
             self.n_img+=1
 
     def reset(self, randomize, save_video, iter):
@@ -173,7 +173,8 @@ class CarEnv:
         if save_video:
             print ("saving video turned on")
             #self.cap = cv2.VideoCapture(0)
-            self.out = cv2.VideoWriter("/scratch/cluster/stephane/cluster_quickstart/examples/running_carla/episode_footage/output_"+str(iter)+".avi", -1,1, (height,width))
+            fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
+            self.out = cv2.VideoWriter("episode_footage/output_"+str(iter)+".avi", fourcc,1, (height,width))
             self.n_img = 0
         self.sensor.listen(lambda data: self.process_img(data,save_video,iter))
         #workaround to get things started sooner
@@ -834,15 +835,19 @@ def run_model(host,world_port):
         t = 0
         episode_reward = 0
         done = False
+        print ("---------------on iteration " + str(n_iters) + "------------------")
         while not done:
             a, a_log_prob = policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
             s_prime, reward, done, info = env.step(a.detach().tolist())
+            velocity = s_prime[1]
+            print ("velocity: " + str(velocity))
             s = s_prime
             t+=1
             episode_reward+=reward
 
         print ("Episode reward: " + str(episode_reward))
         print ("Percent completed: " + str(info[0]))
+        print ("\n")
         env.cleanup()
 
 
