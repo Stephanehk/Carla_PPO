@@ -536,7 +536,8 @@ class CarEnv:
 
     def step (self, action):
         self.car_agent.apply_control(carla.VehicleControl(throttle=action[0][0],steer=action[0][1]))
-        #time.sleep(1)
+        self.world.tick()
+
         velocity = self.car_agent.get_velocity()
 
         #get state information
@@ -861,10 +862,8 @@ def random_baseline(host,world_port):
     moving_avg = 0
 
     config = wandb.config
-    config.learning_rate = lr
 
-
-    wandb.watch(prev_policy)
+    #wandb.watch(prev_policy)
 
     for iters in range (n_iters):
         s = env.reset(False,False,iters)
@@ -895,8 +894,8 @@ def random_baseline(host,world_port):
         wandb.log({"timesteps before termination": t})
 
 def main(n_vehicles,host,world_port,tm_port):
-    train_PPO(host,world_port)
-    #random_baseline(host,world_port)
+    #train_PPO(host,world_port)
+    random_baseline(host,world_port)
     #run_model(host,world_port)
 
 if __name__ == '__main__':
