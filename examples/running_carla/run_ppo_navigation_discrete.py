@@ -575,8 +575,8 @@ class CarEnv:
         #------------------------------------------------------------------------------------------------------------------
         #reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
         #self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
-        reward = self.statistics_manager.route_record["score_composed"]
-        self.events.clear()
+        reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
+        self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
         #------------------------------------------------------------------------------------------------------------------
         # reward = 1000*(self.d_completed - self.statistics_manager.prev_d_completed) + 0.05*(velocity_kmh-self.statistics_manager.prev_velocity_kmh) - 10*self.statistics_manager.route_record["score_penalty"]
         # self.statistics_manager.prev_d_completed = self.d_completed
@@ -616,6 +616,7 @@ class CarEnv:
 device = torch.device("cpu")
 class PPO_Agent(nn.Module):
     def __init__(self, linear_state_dim, action_dim, action_std):
+        self.action_options = [[[0,-1]],[[0,0]],[[0,1]],[[0.5,-1]],[[0.5,0]],[[0.5,1]],[[1,-1]],[[1,0]],[[1,1]], [[0,-0.5]],[[0,0.5]],[[0.5,-0.5]],[[0.5,0.5]],[[1,-0.5]],[[1,0.5]]]
         super(PPO_Agent, self).__init__()
         # action mean range -1 to 1
         self.actorConv = nn.Sequential(
@@ -679,7 +680,7 @@ class PPO_Agent(nn.Module):
         dist = Categorical(action_prob)
         action = dist.sample()
         action_log_prob = dist.log_prob(action)
-        return action, action_log_prob
+        return self.action_options[action], action, action_log_prob
 
     def get_training_params(self,frame,mes, action):
         frame = torch.stack(frame)
@@ -726,7 +727,7 @@ def train_PPO(host,world_port):
 
     n_states = 8
     #currently the action array will be [throttle, steer]
-    n_actions = 2
+    n_actions = 15
 
     action_std = 0.5
     #init models
@@ -753,8 +754,8 @@ def train_PPO(host,world_port):
         actions_log_probs = []
         states_p = []
         while not done:
-            a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
-            s_prime, reward, done, info = env.step(a.detach().tolist())
+            formatted_a, a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
+            s_prime, reward, done, info = env.step(formatted_a)
 
             eps_frames.append(format_frame(s[0]))
             eps_mes.append(format_mes(s[1:]))
@@ -813,83 +814,6 @@ def train_PPO(host,world_port):
             torch.save(policy.state_dict(),"policy_state_dictionary.pt")
         prev_policy.load_state_dict(policy.state_dict())
 
-
-def run_model(host,world_port):
-    env = CarEnv(host,world_port)
-    n_iters = 20
-
-    n_states = 8
-    #currently the action array will be [throttle, steer]
-    #throttle: 0, 0.5, 1
-    #steer: -1,-0.5,0,0.5,1
-    n_actions = 8
-    action_std = 0.5
-    #init model
-    policy = PPO_Agent(n_states, n_actions, action_std).to(device)
-    policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
-    policy.eval()
-
-    for iters in range (n_iters):
-        s = env.reset(False,True,iters)
-        t = 0
-        episode_reward = 0
-        done = False
-        print ("---------------on iteration " + str(n_iters) + "------------------")
-        while not done:
-            a, a_log_prob = policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
-            s_prime, reward, done, info = env.step(a.detach().tolist())
-            velocity = s_prime[1]
-            print ("velocity: " + str(velocity))
-            s = s_prime
-            t+=1
-            episode_reward+=reward
-
-        print ("Episode reward: " + str(episode_reward))
-        print ("Percent completed: " + str(info[0]))
-        print ("\n")
-        env.cleanup()
-
-
-def random_baseline(host,world_port):
-    wandb.init(project='PPO_Carla_Navigation')
-    env = CarEnv(host,world_port)
-    n_iters = 10000
-    avg_t = 0
-    moving_avg = 0
-
-    config = wandb.config
-    config.learning_rate = lr
-
-
-    wandb.watch(prev_policy)
-
-    for iters in range (n_iters):
-        s = env.reset(False,False,iters)
-        t = 0
-        episode_reward = 0
-        done = False
-        while not done:
-            s_prime, reward, done, info = env.step([[random.uniform(-1, 1),random.uniform(-1, 1)]])
-            t+=1
-            episode_reward+=reward
-
-        if t == 1:
-            continue
-        print ("Episode reward: " + str(episode_reward))
-        print ("Percent completed: " + str(info[0]))
-        avg_t+=t
-        env.cleanup()
-        moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
-
-        wandb.log({"episode_reward (total_score)": episode_reward})
-        wandb.log({"average_reward (total_score)": moving_avg})
-        wandb.log({"percent_completed": info[0]})
-        wandb.log({"number_of_collisions": info[1]})
-        wandb.log({"number_of_trafficlight_violations": info[2]})
-        wandb.log({"number_of_stopsign_violations": info[3]})
-        wandb.log({"number_of_route_violations": info[4]})
-        wandb.log({"number_of_times_vehicle_blocked": info[5]})
-        wandb.log({"timesteps before termination": t})
 
 def main(n_vehicles,host,world_port,tm_port):
     #train_PPO(host,world_port)
