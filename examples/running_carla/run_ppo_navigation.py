@@ -793,6 +793,11 @@ def train_PPO(host,world_port):
         if (len(eps_frames) == 1):
             continue
 
+        discounted_reward = 0
+        for i in range (len(rewards)):
+            rewards[len(rewards)-1-i] = rewards[len(rewards)-1-i] + (gamma*discounted_reward)
+            discounted_reward = rewards[len(rewards)-1-i]
+
         rewards = torch.tensor(rewards).to(device)
         rewards= (rewards-rewards.mean())/rewards.std()
 
