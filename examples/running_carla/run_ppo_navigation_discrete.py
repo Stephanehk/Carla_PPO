@@ -744,81 +744,85 @@ def train_PPO(host,world_port):
     wandb.watch(prev_policy)
 
     for iters in range (n_iters):
-        s = env.reset(False,False,iters)
-        t = 0
-        episode_reward = 0
-        done = False
-        rewards = []
-        eps_frames = []
-        eps_mes = []
-        actions = []
-        actions_log_probs = []
-        states_p = []
-        while not done:
-            formatted_a, a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
-            s_prime, reward, done, info = env.step(formatted_a)
+        try:
+            s = env.reset(False,False,iters)
+            t = 0
+            episode_reward = 0
+            done = False
+            rewards = []
+            eps_frames = []
+            eps_mes = []
+            actions = []
+            actions_log_probs = []
+            states_p = []
+            while not done:
+                formatted_a, a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
+                s_prime, reward, done, info = env.step(formatted_a)
 
-            eps_frames.append(format_frame(s[0]))
-            eps_mes.append(format_mes(s[1:]))
-            actions.append(a)
-            actions_log_probs.append(a_log_prob)
-            rewards.append(reward)
-            states_p.append(s_prime)
+                eps_frames.append(format_frame(s[0]))
+                eps_mes.append(format_mes(s[1:]))
+                actions.append(a)
+                actions_log_probs.append(a_log_prob)
+                rewards.append(reward)
+                states_p.append(s_prime)
 
-            s = s_prime
-            t+=1
-            episode_reward+=reward
+                s = s_prime
+                t+=1
+                episode_reward+=reward
 
-        env.cleanup()
-        if t == 1:
-            continue
-        print ("Episode reward: " + str(episode_reward))
-        print ("Percent completed: " + str(info[0]))
-        avg_t+=t
-        moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
+            env.cleanup()
+            if t == 1:
+                continue
+            print ("Episode reward: " + str(episode_reward))
+            print ("Percent completed: " + str(info[0]))
+            avg_t+=t
+            moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
 
-        wandb.log({"episode_reward (suggested reward w/ ri)": episode_reward})
-        wandb.log({"average_reward (suggested reward w/ ri)": moving_avg})
-        wandb.log({"percent_completed": info[0]})
-        wandb.log({"number_of_collisions": info[1]})
-        wandb.log({"number_of_trafficlight_violations": info[2]})
-        wandb.log({"number_of_stopsign_violations": info[3]})
-        wandb.log({"number_of_route_violations": info[4]})
-        wandb.log({"number_of_times_vehicle_blocked": info[5]})
-        wandb.log({"timesteps before termination": t})
-        if (len(eps_frames) == 1):
-            continue
+            wandb.log({"episode_reward (suggested reward w/ ri)": episode_reward})
+            wandb.log({"average_reward (suggested reward w/ ri)": moving_avg})
+            wandb.log({"percent_completed": info[0]})
+            wandb.log({"number_of_collisions": info[1]})
+            wandb.log({"number_of_trafficlight_violations": info[2]})
+            wandb.log({"number_of_stopsign_violations": info[3]})
+            wandb.log({"number_of_route_violations": info[4]})
+            wandb.log({"number_of_times_vehicle_blocked": info[5]})
+            wandb.log({"timesteps before termination": t})
+            if (len(eps_frames) == 1):
+                continue
 
-        discounted_reward = 0
-        for i in range (len(rewards)):
-            rewards[len(rewards)-1-i] = rewards[len(rewards)-1-i] + (gamma*discounted_reward)
-            discounted_reward = rewards[len(rewards)-1-i]
+            discounted_reward = 0
+            for i in range (len(rewards)):
+                rewards[len(rewards)-1-i] = rewards[len(rewards)-1-i] + (gamma*discounted_reward)
+                discounted_reward = rewards[len(rewards)-1-i]
 
-        rewards = torch.tensor(rewards).to(device)
-        rewards= (rewards-rewards.mean())/rewards.std()
+            rewards = torch.tensor(rewards).to(device)
+            rewards= (rewards-rewards.mean())/rewards.std()
 
-        actions_log_probs = torch.FloatTensor(actions_log_probs).to(device)
-        #train PPO
-        for i in range(n_epochs):
-            current_action_log_probs, state_values, entropies = policy.get_training_params(eps_frames,eps_mes,actions)
+            actions_log_probs = torch.FloatTensor(actions_log_probs).to(device)
+            #train PPO
+            for i in range(n_epochs):
+                current_action_log_probs, state_values, entropies = policy.get_training_params(eps_frames,eps_mes,actions)
 
-            policy_ratio = torch.exp(current_action_log_probs - actions_log_probs.detach())
-            #policy_ratio = current_action_log_probs.detach()/actions_log_probs
-            advantage = rewards - state_values.detach()
+                policy_ratio = torch.exp(current_action_log_probs - actions_log_probs.detach())
+                #policy_ratio = current_action_log_probs.detach()/actions_log_probs
+                advantage = rewards - state_values.detach()
 
-            update1 = (policy_ratio*advantage).float()
-            update2 = (torch.clamp(policy_ratio,1-clip_val, 1+clip_val) * advantage).float()
-            loss = -torch.min(update1,update2) + 0.5*mse(state_values.float(),rewards.float()) - 0.001*entropies
+                update1 = (policy_ratio*advantage).float()
+                update2 = (torch.clamp(policy_ratio,1-clip_val, 1+clip_val) * advantage).float()
+                loss = -torch.min(update1,update2) + 0.5*mse(state_values.float(),rewards.float()) - 0.001*entropies
 
-            optimizer.zero_grad()
-            loss.mean().backward()
-            optimizer.step()
-            print ("    on epoch " + str(i))
-            #wandb.log({"loss": loss.mean()})
+                optimizer.zero_grad()
+                loss.mean().backward()
+                optimizer.step()
+                print ("    on epoch " + str(i))
+                #wandb.log({"loss": loss.mean()})
 
-        if iters % 50 == 0:
-            torch.save(policy.state_dict(),"policy_state_dictionary.pt")
-        prev_policy.load_state_dict(policy.state_dict())
+            if iters % 50 == 0:
+                torch.save(policy.state_dict(),"policy_state_dictionary.pt")
+            prev_policy.load_state_dict(policy.state_dict())
+        except RuntimeError as e:
+            print (e)
+
 
 
 def main(n_vehicles,host,world_port,tm_port):
