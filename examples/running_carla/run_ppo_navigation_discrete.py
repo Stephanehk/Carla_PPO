@@ -777,8 +777,8 @@ def train_PPO(host,world_port):
         avg_t+=t
         moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
 
-        wandb.log({"episode_reward": episode_reward})
-        wandb.log({"average_reward": moving_avg})
+        wandb.log({"episode_reward (suggested reward w/ ri)": episode_reward})
+        wandb.log({"average_reward (suggested reward w/ ri)": moving_avg})
         wandb.log({"percent_completed": info[0]})
         wandb.log({"number_of_collisions": info[1]})
         wandb.log({"number_of_trafficlight_violations": info[2]})
