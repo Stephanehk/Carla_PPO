@@ -13,13 +13,50 @@ import os
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
+# class UnFlatten(nn.Module):
+#     def forward(self, input, size=1024):
+#         out= input.view(input.size(0), size, 1, 1)
+#         return out
+#
+# class VAE(nn.Module):
+#     def __init__(self, image_channels=3, h_dim=1024, z_dim=32):
+#         super(VAE, self).__init__()
+#         self.encoder = nn.Sequential(
+#             nn.Conv2d(image_channels, 32, kernel_size=4, stride=2),
+#             nn.ReLU(),
+#             nn.Conv2d(32, 64, kernel_size=4, stride=2),
+#             nn.ReLU(),
+#             nn.Conv2d(64, 128, kernel_size=4, stride=2),
+#             nn.ReLU(),
+#             nn.Conv2d(128, 256, kernel_size=4, stride=2),
+#             nn.ReLU(),
+#             nn.Flatten()
+#         )
+#
+#         self.fc1 = nn.Linear(h_dim, z_dim)
+#         self.fc2 = nn.Linear(h_dim, z_dim)
+#         self.fc3 = nn.Linear(z_dim, h_dim)
+#
+#         self.decoder = nn.Sequential(
+#             UnFlatten(),
+#             nn.ConvTranspose2d(h_dim, 128, kernel_size=5, stride=2),
+#             nn.ReLU(),
+#             nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2),
+#             nn.ReLU(),
+#             nn.ConvTranspose2d(64, 32, kernel_size=6, stride=2),
+#             nn.ReLU(),
+#             nn.ConvTranspose2d(32, image_channels, kernel_size=6, stride=2),
+#             nn.Sigmoid(),
+#         )
+
+
 class UnFlatten(nn.Module):
-    def forward(self, input, size=1024):
+    def forward(self, input, size=230400):
         out= input.view(input.size(0), size, 1, 1)
         return out
 
 class VAE(nn.Module):
-    def __init__(self, image_channels=3, h_dim=1024, z_dim=32):
+    def __init__(self, image_channels=3, h_dim=230400, z_dim=32):
         super(VAE, self).__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(image_channels, 32, kernel_size=4, stride=2),
@@ -39,13 +76,13 @@ class VAE(nn.Module):
 
         self.decoder = nn.Sequential(
             UnFlatten(),
-            nn.ConvTranspose2d(h_dim, 128, kernel_size=5, stride=2),
+            nn.ConvTranspose2d(h_dim, 128, kernel_size=5, stride=3),
             nn.ReLU(),
-            nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2),
+            nn.ConvTranspose2d(128, 64, kernel_size=5, stride=3),
             nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, kernel_size=6, stride=2),
+            nn.ConvTranspose2d(64, 32, kernel_size=6, stride=5),
             nn.ReLU(),
-            nn.ConvTranspose2d(32, image_channels, kernel_size=6, stride=2),
+            nn.ConvTranspose2d(32, image_channels, kernel_size=6, stride=6),
             nn.Sigmoid(),
         )
 
@@ -76,8 +113,7 @@ class VAE(nn.Module):
         z = self.decode(z)
         return z, mu, logvar
 
-model = VAE()
-#.to(device)
+model = VAE().to(device)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 # Reconstruction + KL divergence losses summed over all elements and batch
@@ -95,16 +131,20 @@ def loss_fn(recon_x, x, mu, logvar):
 
 def load_images_from_folder(folder):
     images = []
+    i = 0
     for filename in os.listdir(folder):
+        i+=1
+        if i > 1:
+            return images
         img = cv2.imread(os.path.join(folder,filename))
         if img is not None:
-            images.append(torch.Tensor(img))
+            images.append(img)
     return images
 
 
 def format_frame(frame):
-    frame = cv2.resize(frame,(64,64))
-    frame = torch.FloatTensor(frame)
+    frame = cv2.resize(frame,(516,516))
+    frame = torch.FloatTensor(frame).to(device)
     h,w,c = frame.shape
     frame = frame.unsqueeze(0).view(1, c, h, w)
     return frame
@@ -115,17 +155,17 @@ def train(epochs):
     print("DONE\n")
     print ("training...")
 
+    # img = cv2.imread("/Users/stephanehatgiskessell/Desktop/Carla_PPO/examples/running_carla/sample_frames/frame0.121161433825.png")
+    # X = [img]
+
     for epoch in range(epochs):
         train_loss = 0
         for data in X:
             #data = data.to(device)
             data = format_frame(data)
             recon_images, mu, logvar = model(data)
-            print (recon_images.shape)
-            print (data.shape)
 
             loss, bce, kld = loss_fn(recon_images, data, mu, logvar)
-
             train_loss+=loss
             optimizer.zero_grad()
             loss.backward()
@@ -137,4 +177,4 @@ def train(epochs):
     torch.save(model.state_dict(), "dim=64VAE_state_dictionary.pt")
 
 
-train (1000)
+train (1)
