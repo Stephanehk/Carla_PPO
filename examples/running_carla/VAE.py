@@ -11,7 +11,8 @@ from torchvision.utils import save_image
 import cv2
 import os
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 
 # class UnFlatten(nn.Module):
 #     def forward(self, input, size=1024):
@@ -90,7 +91,7 @@ class VAE(nn.Module):
         std = logvar.mul(0.5).exp_()
         # return torch.normal(mu, std)
         esp = torch.randn(*mu.size())
-        z = mu + std * esp
+        z = mu.to(device) + std.to(device) * esp.to(device)
         return z
 
     def bottleneck(self, h):
@@ -99,7 +100,7 @@ class VAE(nn.Module):
         return z, mu, logvar
 
     def encode(self, x):
-        h = self.encoder(x)
+        h = self.encoder(x).to(device)
         z, mu, logvar = self.bottleneck(h)
         return z, mu, logvar
 
@@ -134,7 +135,7 @@ def load_images_from_folder(folder):
     i = 0
     for filename in os.listdir(folder):
         i+=1
-        if i > 1:
+        if i > 10000:
             return images
         img = cv2.imread(os.path.join(folder,filename))
         if img is not None:
@@ -174,7 +175,7 @@ def train(epochs):
         print('====> Epoch: {} Average loss: {:.4f}'.format(
               epoch, train_loss / len(X)))
     print ("DONE\n")
-    torch.save(model.state_dict(), "dim=64VAE_state_dictionary.pt")
+    torch.save(model.state_dict(), "dim=516VAE_state_dictionary.pt")
 
 
-train (1)
+train (1000)
