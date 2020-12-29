@@ -614,8 +614,8 @@ class CarEnv:
             self.route_waypoints_unformatted.append(waypoint)
         self.route_kdtree = KDTree(np.array(self.route_waypoints))
 
-#device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-device = torch.device("cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cpu")
 class PPO_Agent(nn.Module):
     def __init__(self, linear_state_dim, action_dim, action_std):
         super(PPO_Agent, self).__init__()
@@ -677,11 +677,12 @@ class PPO_Agent(nn.Module):
     def choose_action(self,frame,mes):
         #state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         #state = torch.FloatTensor(state).to(device)
-        mean = self.actor(frame,mes)
-        cov_matrix = torch.diag(self.action_var)
-        gauss_dist = MultivariateNormal(mean,cov_matrix)
-        action = gauss_dist.sample()
-        action_log_prob = gauss_dist.log_prob(action)
+        with torch.no_grad():
+            mean = self.actor(frame,mes)
+            cov_matrix = torch.diag(self.action_var)
+            gauss_dist = MultivariateNormal(mean,cov_matrix)
+            action = gauss_dist.sample()
+            action_log_prob = gauss_dist.log_prob(action)
         return action, action_log_prob
 
     def get_training_params(self,frame,mes, action):
