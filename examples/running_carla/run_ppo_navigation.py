@@ -130,17 +130,26 @@ class CarEnv:
         #norm = cv2.normalize(rgb, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
         self.rgb_cam = rgb
         if save_video:
+            #percent complete
+            cv2.putText(rgb, str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
+            #high level command
+            cv2.putText(rgb, self.high_level_command, (2,25), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
+            #closest waypoint (x,y,z)
+            cv2.putText(rgb, str(self.closest_waypoint), (2,40), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
+            #distance 2 waypoint
+            cv2.putText(rgb, str(self.d_completed), (2,55), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
+
             self.out.write(rgb)
             #cv2.imwrite("/scratch/cluster/stephane/cluster_quickstart/examples/running_carla/episode_footage/frame_"+str(iter)+str(self.n_img)+".png",rgb)
             self.n_img+=1
 
     def reset(self, randomize, save_video, iter):
-        if (randomize):
-            self.settings = world.get_settings()
-            self.settings.set(WeatherId=random.randrange(14))
-            self.settings.set(SendNonPlayerAgentsInfo=True,NumberOfVehicles=random.randrange(30),NumberOfPedestrians=random.randrange(30),WeatherId=random.randrange(14))
-            self.settings.randomize_seeds()
-            self.world.apply_settings(self.settings)
+        # if (randomize):
+        #     self.settings = world.get_settings()
+        #     self.settings.set(WeatherId=random.randrange(14))
+        #     self.settings.set(SendNonPlayerAgentsInfo=True,NumberOfVehicles=random.randrange(30),NumberOfPedestrians=random.randrange(30),WeatherId=random.randrange(14))
+        #     self.settings.randomize_seeds()
+        #     self.world.apply_settings(self.settings)
 
         self.blocked_start= 0
         self.blocked = False
@@ -542,8 +551,13 @@ class CarEnv:
 
         #get state information
         closest_index = self.route_kdtree.query([[self.car_agent.get_location().x,self.car_agent.get_location().y,self.car_agent.get_location().z]],k=1)[1][0][0]
-        self.followed_waypoints.append(self.route_waypoints[closest_index])
-        command_encoded = self.command2onehot.get(str(self.route_commands[closest_index]))
+
+        self.closest_waypoint = self.route_waypoints[closest_index]
+        self.followed_waypoints.append(self.closest_waypoint)
+
+        self.high_level_command = str(self.route_commands[closest_index])
+        command_encoded = self.command2onehot.get(self.high_level_command)
+
         #d2target = np.sqrt(np.power(self.car_agent.get_location().x-self.target.location.x,2)+np.power(self.car_agent.get_location().y-self.target.location.y,2)+np.power(self.car_agent.get_location().z-self.target.location.z,2))
         d2target = self.statistics_manager.route_record["route_length"] - self.statistics_manager.compute_route_length(self.followed_waypoints)
         self.d_completed = self.statistics_manager.compute_route_length(self.followed_waypoints)
