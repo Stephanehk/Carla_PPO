@@ -18,8 +18,10 @@ import wandb
 from shapely.geometry import LineString
 from traffic_events import TrafficEventType
 from statistics_manager import StatisticManager
-from agents.navigation.global_route_planner import GlobalRoutePlanner
-from agents.navigation.global_route_planner_dao import GlobalRoutePlannerDAO
+#IK this is bad, fix file path stuff later :(
+sys.path.append("/scratch/cluster/stephane/Carla_0.9.10/PythonAPI/carla/agents/navigation")
+from global_route_planner import GlobalRoutePlanner
+from global_route_planner_dao import GlobalRoutePlannerDAO
 
 from scripts.launch_carla import launch_carla_server
 from scripts.kill_carla import kill_carla
