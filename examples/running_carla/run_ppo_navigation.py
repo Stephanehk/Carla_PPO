@@ -129,7 +129,7 @@ class CarEnv:
         rgb = img[:,:,:3]
         #norm = cv2.normalize(rgb, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
         self.rgb_cam = rgb
-        if save_video:
+        if save_video and self.started_sim:
             #percent complete
             cv2.putText(rgb, str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
             #high level command
@@ -150,7 +150,7 @@ class CarEnv:
         #     self.settings.set(SendNonPlayerAgentsInfo=True,NumberOfVehicles=random.randrange(30),NumberOfPedestrians=random.randrange(30),WeatherId=random.randrange(14))
         #     self.settings.randomize_seeds()
         #     self.world.apply_settings(self.settings)
-
+        self.started_sim = False
         self.blocked_start= 0
         self.blocked = False
         self.last_col_time = 0
@@ -544,6 +544,7 @@ class CarEnv:
             self.n_route_violations+=1
 
     def step (self, action):
+        self.started_sim = True
         self.car_agent.apply_control(carla.VehicleControl(throttle=action[0][0],steer=action[0][1]))
         self.world.tick()
 
