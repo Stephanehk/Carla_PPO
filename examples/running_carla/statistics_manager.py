@@ -35,6 +35,27 @@ class StatisticManager:
 
         return route_length
 
+    def compute_d2target(self,trajectory):
+        route_length = 0.0
+        previous_transform = None
+        seen_waypoints = []
+        for transform in trajectory:
+            if previous_transform:
+                x, y, z = transform
+                prev_x, prev_y, prev_z = previous_transform
+                dist = math.sqrt((x-prev_x)*(x-prev_x) +
+                                 (y-prev_y)*(y-prev_y) +
+                                 (z-prev_z)*(z-prev_z))
+                if transform in seen_waypoints:
+                    route_length -= dist
+                else:
+                    route_length += dist
+
+            previous_transform = transform
+            seen_waypoints.append(transform)
+
+        return route_length
+
     def compute_route_statistics(self, duration, trajector_events):
             """
             Compute the current statistics by evaluating all relevant scenario criteria
