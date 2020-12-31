@@ -131,6 +131,8 @@ class CarEnv:
         self.rgb_cam = rgb
         if save_video and self.started_sim:
             #percent complete
+            rgb = cv2.UMat(rgb)
+            rgb = cv2.copyMakeBorder(rgb, 60,0,0,0, cv2.BORDER_CONSTANT, None, 0)
             cv2.putText(rgb, str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
             #high level command
             cv2.putText(rgb, self.high_level_command, (2,25), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
@@ -138,7 +140,8 @@ class CarEnv:
             cv2.putText(rgb, str(self.closest_waypoint), (2,40), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
             #distance 2 waypoint
             cv2.putText(rgb, str(self.d_completed), (2,55), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
-
+            #rgb = rgb.reshape(height+60,width,3)
+            rgb = cv2.resize(rgb,(height+60,width))
             self.out.write(rgb)
             #cv2.imwrite("/scratch/cluster/stephane/cluster_quickstart/examples/running_carla/episode_footage/frame_"+str(iter)+str(self.n_img)+".png",rgb)
             self.n_img+=1
@@ -184,7 +187,7 @@ class CarEnv:
             print ("saving video turned on")
             #self.cap = cv2.VideoCapture(0)
             fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
-            self.out = cv2.VideoWriter("episode_footage/output_"+str(iter)+".avi", fourcc,FPS, (height,width))
+            self.out = cv2.VideoWriter("episode_footage/output_"+str(iter)+".avi", fourcc,FPS, (height+60,width))
             self.n_img = 0
         self.sensor.listen(lambda data: self.process_img(data,save_video,iter))
         #workaround to get things started sooner
@@ -916,8 +919,8 @@ def random_baseline(host,world_port):
 
 def main(n_vehicles,host,world_port,tm_port):
     #train_PPO(host,world_port)
-    random_baseline(host,world_port)
-    #run_model(host,world_port)
+    #random_baseline(host,world_port)
+    run_model(host,world_port)
 
 if __name__ == '__main__':
     import argparse
