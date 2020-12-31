@@ -6,7 +6,7 @@ from traffic_events import TrafficEventType
 
 class StatisticManager:
 
-    def __init__(self,trajectory):
+    def __init__(self, trajectory):
         self.route_record = {}
         self.route_record['route_length'] = self.compute_route_length(trajectory)
         self.prev_score = 0
@@ -25,8 +25,8 @@ class StatisticManager:
         previous_transform = None
         for transform in trajectory:
             if previous_transform:
-                x,y,z = transform
-                prev_x,prev_y,prev_z = previous_transform
+                x, y, z = transform
+                prev_x, prev_y, prev_z = previous_transform
                 dist = math.sqrt((x-prev_x)*(x-prev_x) +
                                  (y-prev_y)*(y-prev_y) +
                                  (z-prev_z)*(z-prev_z))
@@ -35,7 +35,7 @@ class StatisticManager:
 
         return route_length
 
-    def compute_route_statistics(self,duration, trajector_events):
+    def compute_route_statistics(self, duration, trajector_events):
             """
             Compute the current statistics by evaluating all relevant scenario criteria
             """
@@ -95,7 +95,14 @@ class StatisticManager:
             # update route scores
             self.route_record['score_route'] = score_route
             self.route_record['score_penalty'] = score_penalty
-            self.route_record['score_composed'] = max(score_route*score_penalty*route_infraction, 0.0)
+            if score_route >= 0:
+                self.route_record['score_composed'] = max(score_route*score_penalty*route_infraction, 0.0)
+            else:
+                try:
+                    self.route_record['score_composed'] = score_route / (score_penalty * route_infraction)
+                except ZeroDivisionError:
+                    self.route_record['score_composed'] = score_route
+
             self.route_record['route_percentage'] = self.prev_route_completion
 
             # update status
