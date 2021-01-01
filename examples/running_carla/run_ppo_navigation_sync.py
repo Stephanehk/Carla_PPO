@@ -29,13 +29,13 @@ from PIL import Image, ImageDraw
 
 
 class CarlaEnv(object):
-    def __init__(self, args, town='Town01'):
+    def __init__(self, client, town='Town01'):
         # Tunable parameters
         self.FRAME_RATE = 30.0  # in Hz
         self.MAX_EP_LENGTH = 60  # in seconds
         self.MAX_EP_LENGTH = self.MAX_EP_LENGTH / (1.0 / self.FRAME_RATE)  # convert to ticks
 
-        self._client = args.client
+        self._client = client
 
         self._statistics_manager = StatisticManager
 
@@ -864,7 +864,7 @@ def format_mes(mes):
     return mes
 
 
-def train_PPO(args):
+def train_PPO(client):
     wandb.init(project='PPO_Carla_Navigation')
     n_iters = 10000
     n_epochs = 50
@@ -899,7 +899,7 @@ def train_PPO(args):
         # if iters % 50 == 0:
         #     kill_carla()
         #     launch_carla_server(args.world_port, gpu=3, boot_time=5)
-        with CarlaEnv(args) as env:
+        with CarlaEnv(client) as env:
             s, _, _, _ = env.reset(False, False, iters)
             t = 0
             episode_reward = 0
@@ -981,16 +981,16 @@ def train_PPO(args):
         prev_policy.load_state_dict(policy.state_dict())
 
 
-def launch_client(args):
-    client = carla.Client(args.host, args.world_port)
-    client.set_timeout(args.client_timeout)
+def launch_client(host,world_port,client_timeout):
+    client = carla.Client(host, world_port)
+    client.set_timeout(client_timeout)
     return client
 
 
-def main(args):
+def main(n_vehicles,host,world_port,tm_port,client_timeout):
     # Create client outside of Carla environment to avoid creating zombie clients
-    args.client = launch_client(args)
-    train_PPO(args)
+    client = launch_client(host,world_port,client_timeout)
+    train_PPO(client)
     # random_baseline(host,world_port)
     # run_model(host,world_port)
 
@@ -1003,6 +1003,6 @@ if __name__ == '__main__':
     parser.add_argument('--world-port', type=int, required=True)
     parser.add_argument('--tm-port', type=int, required=True)
     parser.add_argument('--n_vehicles', type=int, default=1)
-    parser.add_argument('--client_timeout', type=int, default=10)
+    parser.add_argument('--client_timeout', type=int, default=1)
 
-    main(parser.parse_args())
+    main(**vars(parser.parse_args()))
