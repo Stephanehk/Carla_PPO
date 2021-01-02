@@ -78,7 +78,7 @@ class CarlaEnv(object):
         self._cleanup()
         self.set_sync_mode(False)
 
-    def init(self, randomize=False, save_video=False, i=0):
+    def init(self, randomize=False, save_video=True, i=0):
         self._settings = self._world.get_settings()
         #get traffic light and stop sign info
         self._list_traffic_lights = []
@@ -96,6 +96,7 @@ class CarlaEnv(object):
         self._total_distance = 0
         self._wrong_distance = 0
         self._current_index = 0
+        self.save_video = save_video
 
         # vehicle, sensor
         self._actor_dict = collections.defaultdict(list)
@@ -137,7 +138,7 @@ class CarlaEnv(object):
 
         self._spawn_car_agent()
         print('car agent spawned')
-        self._setup_sensors(iter=i)
+        self._setup_sensors(iter=i,save_video=self.save_video)
 
         # create random target to reach
         np.random.seed(6)
@@ -186,7 +187,7 @@ class CarlaEnv(object):
             self._car_agent = self._world.try_spawn_actor(self._car_agent_model, self._start_pose)
         self._actor_dict['car_agent'].append(self._car_agent)
 
-    def _setup_sensors(self, save_video=False, height=80, width=80, fov=10, FPS=60, iter=0):
+    def _setup_sensors(self, save_video=self.save_video, height=80, width=80, fov=10, FPS=60, iter=0):
         sensor_relative_transform = carla.Transform(carla.Location(x=2.5, z=0.7))
 
         # get camera sensor
@@ -196,14 +197,13 @@ class CarlaEnv(object):
         self.rgb_cam.set_attribute("fov", f"{fov}")
         self._rgb_cam_sensor = self._world.spawn_actor(self.rgb_cam, sensor_relative_transform, attach_to=self._car_agent)
         self._actor_dict['camera'].append(self._rgb_cam_sensor)
+        self.out = None
         if save_video:
-            self.out = None
-            if save_video:
-                print ("saving video turned on")
-                #self.cap = cv2.VideoCapture(0)
-                fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
-                self.out = cv2.VideoWriter("episode_footage/output_"+str(i)+".avi", fourcc,FPS, (height+60,width))
-                self.n_img = 0
+            print ("saving video turned on")
+            #self.cap = cv2.VideoCapture(0)
+            fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
+            self.out = cv2.VideoWriter("episode_footage/output_"+str(i)+".avi", fourcc,FPS, (height+60,width))
+            self.n_img = 0
 
         # get collision sensor
         col_sensor_bp = self._blueprints.find("sensor.other.collision")
@@ -300,7 +300,7 @@ class CarlaEnv(object):
 
         state = [self._retrieve_data(q, timeout) for q in self._queues]
         assert all(x.frame == self.frame for x in state)
-        state = [self.process_img(img, 80, 80, False) for img in state]
+        state = [self.process_img(img, 80, 80, self.save_video) for img in state]
         # state = self.rgb_img # DEBUG
         state = [state, velocity_mag, d2target]
         state.extend(command_encoded)
