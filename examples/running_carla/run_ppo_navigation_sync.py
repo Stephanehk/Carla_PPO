@@ -228,6 +228,7 @@ class CarlaEnv(object):
                 return data
 
     def step(self, timeout, action=None):
+        self.started_sim = True
         # spectator camera with overhead view of ego vehicle
         spectator_rot = self._car_agent.get_transform().rotation
         spectator_rot.pitch -= 10
