@@ -187,7 +187,7 @@ class CarlaEnv(object):
             self._car_agent = self._world.try_spawn_actor(self._car_agent_model, self._start_pose)
         self._actor_dict['car_agent'].append(self._car_agent)
 
-    def _setup_sensors(self, save_video=self.save_video, height=80, width=80, fov=10, FPS=60, iter=0):
+    def _setup_sensors(self, save_video, height=80, width=80, fov=10, FPS=60, iter=0):
         sensor_relative_transform = carla.Transform(carla.Location(x=2.5, z=0.7))
 
         # get camera sensor
@@ -202,7 +202,7 @@ class CarlaEnv(object):
             print ("saving video turned on")
             #self.cap = cv2.VideoCapture(0)
             fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
-            self.out = cv2.VideoWriter("episode_footage/output_"+str(i)+".avi", fourcc,FPS, (height+60,width))
+            self.out = cv2.VideoWriter("episode_footage/output_"+str(iter)+".avi", fourcc,FPS, (height+60,width))
             self.n_img = 0
 
         # get collision sensor
