@@ -395,20 +395,20 @@ class CarlaEnv(object):
         img = np.frombuffer(img.raw_data, dtype='uint8').reshape(height, width, 4)
         rgb = img[:, :, :3]
         rgb = rgb[:, :, ::-1]
-        if save_video and self.started_sim:
+        if save_video and self.started_sim and 'route_percentage' in self.statistics_manager.route_record:
             #percent complete
-            rgb = cv2.UMat(rgb)
-            rgb = cv2.copyMakeBorder(rgb, 60,0,0,0, cv2.BORDER_CONSTANT, None, 0)
-            cv2.putText(rgb, str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
+            rgb_mat = cv2.UMat(rgb)
+            rgb_mat = cv2.copyMakeBorder(rgb_mat, 60,0,0,0, cv2.BORDER_CONSTANT, None, 0)
+            cv2.putText(rgb_mat, str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
             #high level command
-            cv2.putText(rgb, self.high_level_command, (2,25), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(rgb_mat, self.high_level_command, (2,25), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
             #closest waypoint (x,y,z)
-            cv2.putText(rgb, str(self.closest_waypoint), (2,40), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(rgb_mat, str(self.closest_waypoint), (2,40), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
             #distance 2 waypoint
-            cv2.putText(rgb, str(self.d_completed), (2,55), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(rgb_mat, str(self.d_completed), (2,55), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
             #rgb = rgb.reshape(height+60,width,3)
-            rgb = cv2.resize(rgb,(height+60,width))
-            self.out.write(rgb)
+            rgb = cv2.resize(rgb_mat,(height+60,width))
+            self.out.write(rgb_mat)
             #cv2.imwrite("/scratch/cluster/stephane/cluster_quickstart/examples/running_carla/episode_footage/frame_"+str(iter)+str(self.n_img)+".png",rgb)
             self.n_img+=1
         return rgb
@@ -1004,15 +1004,10 @@ def train_PPO(args):
 
 
 def run_model(args):
-    #wandb.init(project='PPO_Carla_Navigation')
     n_iters = 20
     n_epochs = 50
     avg_t = 0
     moving_avg = 0
-
-    #config = wandb.config
-    #config.learning_rate = lr
-
     n_states = 8
     #currently the action array will be [throttle, steer]
     n_actions = 2
@@ -1049,18 +1044,6 @@ def run_model(args):
         print("Percent completed: " + str(info[0]))
         avg_t += t
         moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
-
-        #wandb.log({"episode_reward (suggested reward w/ ri)": episode_reward})
-        #wandb.log({"average_reward (suggested reward w/ ri)": moving_avg})
-        #wandb.log({"percent_completed": info[0]})
-        #wandb.log({"number_of_collisions": info[1]})
-        #wandb.log({"number_of_trafficlight_violations": info[2]})
-        #wandb.log({"number_of_stopsign_violations": info[3]})
-        #wandb.log({"number_of_route_violations": info[4]})
-        #wandb.log({"number_of_times_vehicle_blocked": info[5]})
-        #wandb.log({"timesteps before termination": t})
-        #wandb.log({"iteration": iters})
-
 
 
 def random_baseline(args):
