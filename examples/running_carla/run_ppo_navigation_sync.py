@@ -182,7 +182,7 @@ class CarlaEnv(object):
                 print ("saving video turned on")
                 #self.cap = cv2.VideoCapture(0)
                 fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
-                self.out = cv2.VideoWriter("episode_footage/output_"+str(iter)+".avi", fourcc,FPS, (height+60,width))
+                self.out = cv2.VideoWriter("episode_footage/output_"+str(i)+".avi", fourcc,60, (80+60,80))
                 self.n_img = 0
 
         return self.step(timeout=2)
@@ -780,7 +780,7 @@ class CarlaEnv(object):
         return am_ab > 0 and am_ab < ab_ab and am_ad > 0 and am_ad < ad_ad
 
 
-device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
 
 
@@ -1004,14 +1004,14 @@ def train_PPO(args):
 
 
 def run_model(args):
-    wandb.init(project='PPO_Carla_Navigation')
+    #wandb.init(project='PPO_Carla_Navigation')
     n_iters = 20
     n_epochs = 50
     avg_t = 0
     moving_avg = 0
 
-    config = wandb.config
-    config.learning_rate = lr
+    #config = wandb.config
+    #config.learning_rate = lr
 
     n_states = 8
     #currently the action array will be [throttle, steer]
@@ -1023,14 +1023,14 @@ def run_model(args):
     policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
     policy.eval()
 
-    wandb.watch(prev_policy)
+    #wandb.watch(policy)
 
     for iters in range(n_iters):
         # if iters % 50 == 0:
         #     kill_carla()
         #     launch_carla_server(args.world_port, gpu=3, boot_time=5)
         with CarlaEnv(args) as env:
-            s, _, _, _ = env.reset(False, False, iters)
+            s, _, _, _ = env.reset(False, True, iters)
             t = 0
             episode_reward = 0
             done = False
@@ -1050,28 +1050,28 @@ def run_model(args):
         avg_t += t
         moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
 
-        wandb.log({"episode_reward (suggested reward w/ ri)": episode_reward})
-        wandb.log({"average_reward (suggested reward w/ ri)": moving_avg})
-        wandb.log({"percent_completed": info[0]})
-        wandb.log({"number_of_collisions": info[1]})
-        wandb.log({"number_of_trafficlight_violations": info[2]})
-        wandb.log({"number_of_stopsign_violations": info[3]})
-        wandb.log({"number_of_route_violations": info[4]})
-        wandb.log({"number_of_times_vehicle_blocked": info[5]})
-        wandb.log({"timesteps before termination": t})
-        wandb.log({"iteration": iters})
+        #wandb.log({"episode_reward (suggested reward w/ ri)": episode_reward})
+        #wandb.log({"average_reward (suggested reward w/ ri)": moving_avg})
+        #wandb.log({"percent_completed": info[0]})
+        #wandb.log({"number_of_collisions": info[1]})
+        #wandb.log({"number_of_trafficlight_violations": info[2]})
+        #wandb.log({"number_of_stopsign_violations": info[3]})
+        #wandb.log({"number_of_route_violations": info[4]})
+        #wandb.log({"number_of_times_vehicle_blocked": info[5]})
+        #wandb.log({"timesteps before termination": t})
+        #wandb.log({"iteration": iters})
 
 
 
 def random_baseline(args):
     wandb.init(project='PPO_Carla_Navigation')
-    n_iters = 20
+    n_iters = 10000
     n_epochs = 50
     avg_t = 0
     moving_avg = 0
 
     config = wandb.config
-    config.learning_rate = lr
+    #config.learning_rate = lr
 
     n_states = 8
     #currently the action array will be [throttle, steer]
@@ -1083,7 +1083,7 @@ def random_baseline(args):
     policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
     policy.eval()
 
-    wandb.watch(prev_policy)
+    wandb.watch(policy)
 
     for iters in range(n_iters):
         # if iters % 50 == 0:
@@ -1131,10 +1131,9 @@ def launch_client(args):
 def main(args):
     # Create client outside of Carla environment to avoid creating zombie clients
     args.client = launch_client(args)
-    train_PPO(args)
-    # random_baseline(host,world_port)
-    # run_model(host,world_port)
-
+    #train_PPO(args)
+    #random_baseline(args)
+    run_model(args)
 
 if __name__ == '__main__':
     import argparse
