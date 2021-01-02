@@ -176,15 +176,6 @@ class CarlaEnv(object):
     def reset(self, randomize, save_video, i):
         # self._cleanup()
         # self.init()
-        if save_video:
-            self.out = None
-            if save_video:
-                print ("saving video turned on")
-                #self.cap = cv2.VideoCapture(0)
-                fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
-                self.out = cv2.VideoWriter("episode_footage/output_"+str(i)+".avi", fourcc,60, (80+60,80))
-                self.n_img = 0
-
         return self.step(timeout=2)
 
     def _spawn_car_agent(self):
@@ -205,6 +196,14 @@ class CarlaEnv(object):
         self.rgb_cam.set_attribute("fov", f"{fov}")
         self._rgb_cam_sensor = self._world.spawn_actor(self.rgb_cam, sensor_relative_transform, attach_to=self._car_agent)
         self._actor_dict['camera'].append(self._rgb_cam_sensor)
+        if save_video:
+            self.out = None
+            if save_video:
+                print ("saving video turned on")
+                #self.cap = cv2.VideoCapture(0)
+                fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
+                self.out = cv2.VideoWriter("episode_footage/output_"+str(i)+".avi", fourcc,FPS, (height+60,width))
+                self.n_img = 0
 
         # get collision sensor
         col_sensor_bp = self._blueprints.find("sensor.other.collision")
@@ -1120,9 +1119,6 @@ def random_baseline(args):
         wandb.log({"number_of_times_vehicle_blocked": info[5]})
         wandb.log({"timesteps before termination": t})
         wandb.log({"iteration": iters})
-
-
-
 
 def launch_client(args):
     client = carla.Client(args.host, args.world_port)
