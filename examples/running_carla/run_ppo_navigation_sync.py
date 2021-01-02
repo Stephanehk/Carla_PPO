@@ -176,6 +176,15 @@ class CarlaEnv(object):
     def reset(self, randomize, save_video, i):
         # self._cleanup()
         # self.init()
+        if save_video:
+            self.out = None
+            if save_video:
+                print ("saving video turned on")
+                #self.cap = cv2.VideoCapture(0)
+                fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
+                self.out = cv2.VideoWriter("episode_footage/output_"+str(iter)+".avi", fourcc,FPS, (height+60,width))
+                self.n_img = 0
+
         return self.step(timeout=2)
 
     def _spawn_car_agent(self):
@@ -222,9 +231,7 @@ class CarlaEnv(object):
         # spectator camera with overhead view of ego vehicle
         spectator_rot = self._car_agent.get_transform().rotation
         spectator_rot.pitch -= 10
-        self._spectator.set_transform(carla.Transform
-                                      (self._car_agent.get_transform().location + carla.Location(z=2), spectator_rot)
-                                      )
+        self._spectator.set_transform(carla.Transform(self._car_agent.get_transform().location + carla.Location(z=2), spectator_rot))
 
         if action is not None:
             self._car_agent.apply_control(carla.VehicleControl(throttle=action[0][0], steer=action[0][1]))
@@ -246,7 +253,6 @@ class CarlaEnv(object):
 
         # get command of current waypoint
         command_encoded = self.command2onehot.get(str(self.route_commands[closest_index]))
-
 
         # get next target waypoint assuming they are ordered by the route planner
         self.target_waypoint = self.route_waypoints[self.target_waypoint_idx]
@@ -389,6 +395,22 @@ class CarlaEnv(object):
         img = np.frombuffer(img.raw_data, dtype='uint8').reshape(height, width, 4)
         rgb = img[:, :, :3]
         rgb = rgb[:, :, ::-1]
+        if save_video and self.started_sim:
+            #percent complete
+            rgb = cv2.UMat(rgb)
+            rgb = cv2.copyMakeBorder(rgb, 60,0,0,0, cv2.BORDER_CONSTANT, None, 0)
+            cv2.putText(rgb, str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
+            #high level command
+            cv2.putText(rgb, self.high_level_command, (2,25), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
+            #closest waypoint (x,y,z)
+            cv2.putText(rgb, str(self.closest_waypoint), (2,40), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
+            #distance 2 waypoint
+            cv2.putText(rgb, str(self.d_completed), (2,55), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
+            #rgb = rgb.reshape(height+60,width,3)
+            rgb = cv2.resize(rgb,(height+60,width))
+            self.out.write(rgb)
+            #cv2.imwrite("/scratch/cluster/stephane/cluster_quickstart/examples/running_carla/episode_footage/frame_"+str(iter)+str(self.n_img)+".png",rgb)
+            self.n_img+=1
         return rgb
 
     '''Evaluation tools'''
@@ -981,11 +1003,130 @@ def train_PPO(args):
         prev_policy.load_state_dict(policy.state_dict())
 
 
+def run_model(args):
+    wandb.init(project='PPO_Carla_Navigation')
+    n_iters = 20
+    n_epochs = 50
+    avg_t = 0
+    moving_avg = 0
+
+    config = wandb.config
+    config.learning_rate = lr
+
+    n_states = 8
+    #currently the action array will be [throttle, steer]
+    n_actions = 2
+
+    action_std = 0.5
+    #init models
+    policy = PPO_Agent(n_states, n_actions, action_std).to(device)
+    policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
+    policy.eval()
+
+    wandb.watch(prev_policy)
+
+    for iters in range(n_iters):
+        # if iters % 50 == 0:
+        #     kill_carla()
+        #     launch_carla_server(args.world_port, gpu=3, boot_time=5)
+        with CarlaEnv(args) as env:
+            s, _, _, _ = env.reset(False, False, iters)
+            t = 0
+            episode_reward = 0
+            done = False
+            rewards = []
+            while not done:
+                a, a_log_prob = policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
+                s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
+
+                rewards.append(reward)
+                s = s_prime
+                t += 1
+                episode_reward += reward
+        if t == 1:
+            continue
+        print("Episode reward: " + str(episode_reward))
+        print("Percent completed: " + str(info[0]))
+        avg_t += t
+        moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
+
+        wandb.log({"episode_reward (suggested reward w/ ri)": episode_reward})
+        wandb.log({"average_reward (suggested reward w/ ri)": moving_avg})
+        wandb.log({"percent_completed": info[0]})
+        wandb.log({"number_of_collisions": info[1]})
+        wandb.log({"number_of_trafficlight_violations": info[2]})
+        wandb.log({"number_of_stopsign_violations": info[3]})
+        wandb.log({"number_of_route_violations": info[4]})
+        wandb.log({"number_of_times_vehicle_blocked": info[5]})
+        wandb.log({"timesteps before termination": t})
+        wandb.log({"iteration": iters})
+
+
+
+def random_baseline(args):
+    wandb.init(project='PPO_Carla_Navigation')
+    n_iters = 20
+    n_epochs = 50
+    avg_t = 0
+    moving_avg = 0
+
+    config = wandb.config
+    config.learning_rate = lr
+
+    n_states = 8
+    #currently the action array will be [throttle, steer]
+    n_actions = 2
+
+    action_std = 0.5
+    #init models
+    policy = PPO_Agent(n_states, n_actions, action_std).to(device)
+    policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
+    policy.eval()
+
+    wandb.watch(prev_policy)
+
+    for iters in range(n_iters):
+        # if iters % 50 == 0:
+        #     kill_carla()
+        #     launch_carla_server(args.world_port, gpu=3, boot_time=5)
+        with CarlaEnv(args) as env:
+            s, _, _, _ = env.reset(False, False, iters)
+            t = 0
+            episode_reward = 0
+            done = False
+            rewards = []
+            while not done:
+                s_prime, reward, done, info = env.step(action=[[random.uniform(-1, 1),random.uniform(-1, 1)]], timeout=2)
+
+                rewards.append(reward)
+                s = s_prime
+                t += 1
+                episode_reward += reward
+        if t == 1:
+            continue
+        print("Episode reward: " + str(episode_reward))
+        print("Percent completed: " + str(info[0]))
+        avg_t += t
+        moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
+
+        wandb.log({"episode_reward (suggested reward w/ ri)": episode_reward})
+        wandb.log({"average_reward (suggested reward w/ ri)": moving_avg})
+        wandb.log({"percent_completed": info[0]})
+        wandb.log({"number_of_collisions": info[1]})
+        wandb.log({"number_of_trafficlight_violations": info[2]})
+        wandb.log({"number_of_stopsign_violations": info[3]})
+        wandb.log({"number_of_route_violations": info[4]})
+        wandb.log({"number_of_times_vehicle_blocked": info[5]})
+        wandb.log({"timesteps before termination": t})
+        wandb.log({"iteration": iters})
+
+
+
+
 def launch_client(args):
     client = carla.Client(args.host, args.world_port)
     client.set_timeout(args.client_timeout)
     return client
-
 
 def main(args):
     # Create client outside of Carla environment to avoid creating zombie clients
@@ -1000,26 +1141,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', default='127.0.0.1')
-    parser.add_argument('--world-port', type=int, required=True)
-    parser.add_argument('--tm-port', type=int, required=True)
+    parser.add_argument('--world_port', type=int, required=True)
+    parser.add_argument('--tm_port', type=int, required=True)
     parser.add_argument('--n_vehicles', type=int, default=1)
     parser.add_argument('--client_timeout', type=int, default=10)
 
     main(parser.parse_args())
-
-
-def main(n_vehicles,host,world_port,tm_port):
-    train_PPO(host,world_port)
-    #random_baseline(host,world_port)
-    #run_model(host,world_port)
-
-if __name__ == '__main__':
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--host', default='127.0.0.1')
-    parser.add_argument('--world_port', type=int, required=True)
-    parser.add_argument('--tm_port', type=int, required=True)
-    parser.add_argument('--n_vehicles', type=int, default=10)
-
-    main(**vars(parser.parse_args()))
