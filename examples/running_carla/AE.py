@@ -54,7 +54,7 @@ model = AE()
 bce = nn.BCELoss()
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-def load_images_from_folder(folder):
+def load_train_images_from_folder(folder):
     images = []
     filenames = []
     i = 0
@@ -68,6 +68,21 @@ def load_images_from_folder(folder):
             filenames.append(filename)
     return images,filenames
 
+def load_test_images_from_folder(folder):
+    images = []
+    filenames = []
+    i = 0
+    for filename in os.listdir(folder):
+        i+=1
+        if i > 10000:
+            img = cv2.imread(os.path.join(folder,filename))
+            if img is not None:
+                images.append(img)
+                filenames.append(filename)
+        if i > 15000:
+            return images,filenames
+    return images,filenames
+
 
 def format_frame(frame):
     #frame = cv2.resize(frame,(516,516))
@@ -78,7 +93,7 @@ def format_frame(frame):
 
 def train(epochs):
     print ("loading images...")
-    X, filenames = load_images_from_folder("sample_frames")
+    X, filenames = load_train_images_from_folder("sample_frames")
     print("DONE\n")
     print ("training...")
 
@@ -100,6 +115,20 @@ def train(epochs):
         if epoch%50 == 0:
             torch.save(model.state_dict(), "dim=orig-VAE_state_dictionary.pt")
     print ("DONE\n")
-    torch.save(model.state_dict(), "dim=516VAE_state_dictionary.pt")
+    torch.save(model.state_dict(), "dim=orig-VAE_state_dictionary.pt")
 
+def test():
+    model = AE()
+    model.load_state_dict(torch.load("/Users/stephanehatgiskessell/Desktop/Carla_PPO/examples/running_carla/dim=516VAE_state_dictionary.pt",map_location=torch.device('cpu')))
+    model.eval()
+
+    img_ = cv2.imread("/Users/stephanehatgiskessell/Desktop/Carla_PPO/examples/running_carla/sample_frames/frame0.0077115736319527395.png")
+    img = format_frame(img_)
+
+    encoded_img = model.forward(img).squeeze().view(480,640,3).detach().numpy()
+    print (img_.shape)
+    print (encoded_img.shape)
+    cv2.imshow("original",img_)
+    cv2.imshow("encoded",encoded_img)
+    cv2.waitKey(0)
 train(1000)
