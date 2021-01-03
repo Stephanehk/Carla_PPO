@@ -396,7 +396,7 @@ class CarlaEnv(object):
     def process_img(self, img, height, width, save_video):
         img = np.frombuffer(img.raw_data, dtype='uint8').reshape(height, width, 4)
         rgb = img[:, :, :3]
-        rgb_f = rgb[:, :, ::-1]
+        #rgb_f = rgb[:, :, ::-1]
         if save_video and self.started_sim and 'route_percentage' in self.statistics_manager.route_record:
             #percent complete
             rgb_mat = cv2.UMat(rgb)
@@ -413,7 +413,7 @@ class CarlaEnv(object):
             self.out.write(rgb_mat)
             #cv2.imwrite("/scratch/cluster/stephane/cluster_quickstart/examples/running_carla/episode_footage/frame_"+str(iter)+str(self.n_img)+".png",rgb)
             self.n_img+=1
-        return rgb_f
+        return rgb
 
     '''Evaluation tools'''
 
@@ -933,6 +933,7 @@ class PPO_Agent(nn.Module):
 def format_frame(frame,vae):
     frame = cv2.resize(frame,(127,127))
     frame = cv2.normalize(frame, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+    frame = frame[:, :, ::-1]
     frame = torch.FloatTensor(frame.copy())
     _, h, w, c = frame.shape
     frame = frame.unsqueeze(0).view(1, c, h, w)
