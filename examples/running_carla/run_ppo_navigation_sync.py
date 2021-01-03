@@ -936,12 +936,10 @@ def train_PPO(args):
                 a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
                 s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
 
-                # if reward != 0:
-                #     print('reward is:', reward)
-                eps_frames.append(copy.deepcopy(format_frame(s[0],vae)))
-                eps_mes.append(copy.deepcopy(format_mes(s[1:])))
-                actions.append(copy.deepcopy(a))
-                actions_log_probs.append(copy.deepcopy(a_log_prob))
+                eps_frames.append(format_frame(s[0],vae).detach().clone())
+                eps_mes.append(format_mes(s[1:]).detach().clone())
+                actions.append(a.detach().clone())
+                actions_log_probs.append(a_log_prob.detach().clone())
                 rewards.append(copy.deepcopy(reward))
                 states_p.append(copy.deepcopy(s_prime))
                 s = s_prime
