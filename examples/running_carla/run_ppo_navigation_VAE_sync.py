@@ -15,6 +15,9 @@ import torch.nn as nn
 from torch.optim import Adam
 from torch.distributions import MultivariateNormal
 import wandb
+import copy
+from PIL import Image, ImageDraw
+
 from shapely.geometry import LineString
 from traffic_events import TrafficEventType
 from statistics_manager import StatisticManager
@@ -25,7 +28,6 @@ from global_route_planner_dao import GlobalRoutePlannerDAO
 
 # from scripts.launch_carla import launch_carla_server
 # from scripts.kill_carla import kill_carla
-from PIL import Image, ImageDraw
 
 
 class CarlaEnv(object):
@@ -779,26 +781,84 @@ class CarlaEnv(object):
 
         return am_ab > 0 and am_ab < ab_ab and am_ad > 0 and am_ad < ad_ad
 
-
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
+class Flatten(nn.Module):
+    def forward(self, input):
+        return input.view(input.size(0), -1)
 
+class UnFlatten(nn.Module):
+    def forward(self, input, size=9216):
+        return input.view(input.size(0), size, 1, 1)
+
+class VAE(nn.Module):
+    def __init__(self, image_channels=3, h_dim=9216, z_dim=128):
+        super(VAE, self).__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(image_channels, 32, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(64, 128, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(128, 256, kernel_size=4, stride=2),
+            nn.ReLU(),
+            Flatten()
+        )
+
+        self.fc1 = nn.Linear(h_dim, z_dim)
+        self.fc2 = nn.Linear(h_dim, z_dim)
+        self.fc3 = nn.Linear(z_dim, h_dim)
+
+        self.decoder = nn.Sequential(
+            UnFlatten(),
+            nn.ConvTranspose2d(h_dim, 128, kernel_size=5, stride=2),
+            nn.ReLU(),
+            nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 32, kernel_size=5, stride=3),
+            nn.ReLU(),
+            nn.ConvTranspose2d(32, image_channels, kernel_size=7, stride=3),
+            nn.Sigmoid(),
+        )
+
+    def reparameterize(self, mu, logvar):
+        std = logvar.mul(0.5).exp_()
+        # return torch.normal(mu, std)
+        esp = torch.randn(*mu.size())
+        z = mu + std * esp
+        return z
+
+    def bottleneck(self, h):
+        mu, logvar = self.fc1(h), self.fc2(h)
+        z = self.reparameterize(mu, logvar)
+        return z, mu, logvar
+
+    def encode(self, x):
+        h = self.encoder(x)
+        z, mu, logvar = self.bottleneck(h)
+        return z, mu, logvar
+
+    def decode(self, z):
+        z = self.fc3(z)
+        z = self.decoder(z)
+        return z
+
+    def forward(self, x):
+        z, mu, logvar = self.encode(x)
+        z = self.decode(z)
+        return z, mu, logvar
 
 class PPO_Agent(nn.Module):
-    def __init__(self, linear_state_dim, action_dim, action_std):
+    def __init__(self, linear_state_dim,encoded_vector_size, action_dim, action_std):
         super(PPO_Agent, self).__init__()
         # action mean range -1 to 1
-        self.actorConv = nn.Sequential(
-                nn.Conv2d(3, 6, 5),
+        self.actor= nn.Sequential(
+                nn.Linear(encoded_vector_size + linear_state_dim, 256),
                 nn.Tanh(),
-                nn.MaxPool2d(2, 2),
-                nn.Conv2d(6, 12, 5),
+                nn.Linear(256, 128),
                 nn.Tanh(),
-                nn.MaxPool2d(2, 2),
-                nn.Flatten()
-                )
-        self.actorLin = nn.Sequential(
-                nn.Linear(12*17*17 + linear_state_dim, 64),
+                nn.Linear(128, 64),
                 nn.Tanh(),
                 nn.Linear(64, 32),
                 nn.Tanh(),
@@ -806,47 +866,44 @@ class PPO_Agent(nn.Module):
                 nn.Tanh()
                 )
 
-        self.criticConv = nn.Sequential(
-                nn.Conv2d(3, 6, 5),
+        self.critic= nn.Sequential(
+                nn.Linear(encoded_vector_size + linear_state_dim, 256),
                 nn.Tanh(),
-                nn.MaxPool2d(2, 2),
-                nn.Conv2d(6, 12, 5),
+                nn.Linear(256, 128),
                 nn.Tanh(),
-                nn.MaxPool2d(2, 2),
-                nn.Flatten()
-                )
-        self.criticLin = nn.Sequential(
-                nn.Linear(12*17*17 + linear_state_dim, 64),
+                nn.Linear(128, 64),
                 nn.Tanh(),
                 nn.Linear(64, 32),
                 nn.Tanh(),
-                nn.Linear(32, 1)
+                nn.Linear(32, 1),
                 )
         self.action_var = torch.full((action_dim,), action_std*action_std).to(device)
 
-    def actor(self, frame, mes):
+    def actor_(self, frame, mes):
         frame = frame.to(device)
         mes = mes.to(device)
         if len(list(mes.size())) == 1:
             mes = mes.unsqueeze(0)
-        vec = self.actorConv(frame)
-        X = torch.cat((vec, mes), 1)
-        return self.actorLin(X)
+        if len(list(frame.size())) == 3:
+            frame = frame.squeeze()
+        X = torch.cat((frame, mes), 1)
+        return self.actor(X)
 
-    def critic(self, frame, mes):
+    def critic_(self, frame, mes):
         frame = frame.to(device)
         mes = mes.to(device)
         if len(list(mes.size())) == 1:
             mes = mes.unsqueeze(0)
-        vec = self.criticConv(frame)
-        X = torch.cat((vec, mes), 1)
-        return self.criticLin(X)
+        if len(list(frame.size())) == 3:
+            frame = frame.squeeze()
+        X = torch.cat((frame, mes), 1)
+        return self.critic(X)
 
     def choose_action(self, frame, mes):
         #state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         #state = torch.FloatTensor(state).to(device)
         with torch.no_grad():
-            mean = self.actor(frame, mes)
+            mean = self.actor_(frame, mes)
             cov_matrix = torch.diag(self.action_var)
             gauss_dist = MultivariateNormal(mean, cov_matrix)
             action = gauss_dist.sample()
@@ -863,22 +920,24 @@ class PPO_Agent(nn.Module):
 
         action = torch.stack(action)
 
-        mean = self.actor(frame, mes)
+        mean = self.actor_(frame, mes)
         action_expanded = self.action_var.expand_as(mean)
         cov_matrix = torch.diag_embed(action_expanded).to(device)
 
         gauss_dist = MultivariateNormal(mean, cov_matrix)
         action_log_prob = gauss_dist.log_prob(action).to(device)
         entropy = gauss_dist.entropy().to(device)
-        state_value = torch.squeeze(self.critic(frame, mes)).to(device)
+        state_value = torch.squeeze(self.critic_(frame, mes)).to(device)
         return action_log_prob, state_value, entropy
 
-
-def format_frame(frame):
+def format_frame(frame,vae):
+    frame = cv2.resize(frame,(127,127))
+    frame = cv2.normalize(frame, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
     frame = torch.FloatTensor(frame.copy())
     _, h, w, c = frame.shape
     frame = frame.unsqueeze(0).view(1, c, h, w)
-    return frame
+    encoded_frame,_,_ = vae.encode(frame)
+    return encoded_frame
 
 
 def format_mes(mes):
@@ -900,20 +959,29 @@ def train_PPO(args):
     config = wandb.config
     config.learning_rate = lr
 
-
+    encoded_vector_size = 128
     n_states = 8
     #currently the action array will be [throttle, steer]
     n_actions = 2
 
     action_std = 0.5
     #init models
-    policy = PPO_Agent(n_states, n_actions, action_std).to(device)
-
+    policy = PPO_Agent(n_states,encoded_vector_size, n_actions, action_std).to(device)
     optimizer = Adam(policy.parameters(), lr=lr)
     mse = nn.MSELoss()
 
-    prev_policy = PPO_Agent(n_states, n_actions, action_std).to(device)
+    prev_policy = PPO_Agent(n_states,encoded_vector_size, n_actions, action_std).to(device)
     prev_policy.load_state_dict(policy.state_dict())
+
+    vae = VAE()
+    if encoded_vector_size == 128:
+        vae.load_state_dict(torch.load("dim=127VAE_state_dictionary.pt"))
+    elif encoded_vector_size == 64:
+        vae.load_state_dict(torch.load("dim=64VAE_state_dictionary.pt"))
+    else:
+        print ("no VAE with this dimension")
+        return
+    vae.eval()
 
     wandb.watch(prev_policy)
 
@@ -933,7 +1001,7 @@ def train_PPO(args):
             actions_log_probs = []
             states_p = []
             while not done:
-                a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
+                a, a_log_prob = prev_policy.choose_action(format_frame(s[0],vae), format_mes(s[1:]))
                 s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
 
                 # if reward != 0:
@@ -1008,6 +1076,8 @@ def run_model(args):
     n_epochs = 50
     avg_t = 0
     moving_avg = 0
+
+    encoded_vector_size = 128
     n_states = 8
     #currently the action array will be [throttle, steer]
     n_actions = 2
@@ -1018,7 +1088,15 @@ def run_model(args):
     policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
     policy.eval()
 
-    #wandb.watch(policy)
+    vae = VAE()
+    if encoded_vector_size == 128:
+        vae.load_state_dict(torch.load("dim=127VAE_state_dictionary.pt"))
+    elif encoded_vector_size == 64:
+        vae.load_state_dict(torch.load("dim=64VAE_state_dictionary.pt"))
+    else:
+        print ("no VAE with this dimension")
+        return
+    vae.eval()
 
     for iters in range(n_iters):
         # if iters % 50 == 0:
@@ -1031,7 +1109,7 @@ def run_model(args):
             done = False
             rewards = []
             while not done:
-                a, a_log_prob = policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
+                a, a_log_prob = policy.choose_action(format_frame(s[0],vae), format_mes(s[1:]))
                 s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
 
                 rewards.append(reward)
@@ -1061,10 +1139,6 @@ def random_baseline(args):
     n_actions = 2
 
     action_std = 0.5
-    #init models
-    policy = PPO_Agent(n_states, n_actions, action_std).to(device)
-    policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
-    policy.eval()
 
     wandb.watch(policy)
 
