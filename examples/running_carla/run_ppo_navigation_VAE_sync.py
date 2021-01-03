@@ -80,7 +80,7 @@ class CarlaEnv(object):
         self._cleanup()
         self.set_sync_mode(False)
 
-    def init(self, randomize=False, save_video=True, i=0):
+    def init(self, randomize=False, save_video=False, i=0):
         self._settings = self._world.get_settings()
         #get traffic light and stop sign info
         self._list_traffic_lights = []
@@ -931,11 +931,12 @@ class PPO_Agent(nn.Module):
         return action_log_prob, state_value, entropy
 
 def format_frame(frame,vae):
+    frame = frame[0]
     frame = cv2.resize(frame,(127,127))
     frame = cv2.normalize(frame, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
     frame = frame[:, :, ::-1]
     frame = torch.FloatTensor(frame.copy())
-    _, h, w, c = frame.shape
+    h, w, c = frame.shape
     frame = frame.unsqueeze(0).view(1, c, h, w)
     encoded_frame,_,_ = vae.encode(frame)
     return encoded_frame
@@ -1007,10 +1008,10 @@ def train_PPO(args):
 
                 # if reward != 0:
                 #     print('reward is:', reward)
-                eps_frames.append(copy.deepcopy(format_frame(s[0],vae)))
-                eps_mes.append(copy.deepcopy(format_mes(s[1:])))
-                actions.append(copy.deepcopy(a))
-                actions_log_probs.append(copy.deepcopy(a_log_prob))
+                eps_frames.append(format_frame(s[0],vae).detach().clone())
+                eps_mes.append(format_mes(s[1:]).detach().clone())
+                actions.append(a.detach().clone())
+                actions_log_probs.append(a_log_prob.detach().clone())
                 rewards.append(copy.deepcopy(reward))
                 states_p.append(copy.deepcopy(s_prime))
                 s = s_prime
@@ -1085,7 +1086,7 @@ def run_model(args):
 
     action_std = 0.5
     #init models
-    policy = PPO_Agent(n_states, n_actions, action_std).to(device)
+    policy = PPO_Agent(n_states,encoded_vector_size, n_actions, action_std).to(device)
     policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
     policy.eval()
 
@@ -1186,9 +1187,9 @@ def launch_client(args):
 def main(args):
     # Create client outside of Carla environment to avoid creating zombie clients
     args.client = launch_client(args)
-    #train_PPO(args)
+    train_PPO(args)
     #random_baseline(args)
-    run_model(args)
+    #run_model(args)
 
 if __name__ == '__main__':
     import argparse
