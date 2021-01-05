@@ -98,6 +98,7 @@ class CarlaEnv(object):
         self._total_distance = 0
         self._wrong_distance = 0
         self._current_index = 0
+        self.final_score = None
         self.save_video = save_video
 
         # vehicle, sensor
@@ -331,13 +332,10 @@ class CarlaEnv(object):
         reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
 
         self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
-        #reward = self.statistics_manager.route_record["score_composed"]
-        #self.events.clear()
-        #------------------------------------------------------------------------------------------------------------------
-        # reward = 1000*(self.d_completed - self.statistics_manager.prev_d_completed) + 0.05*(velocity_kmh-self.statistics_manager.prev_velocity_kmh) - 10*self.statistics_manager.route_record["score_penalty"]
-        # self.statistics_manager.prev_d_completed = self.d_completed
-        # self.statistics_manager.prev_velocity_kmh = velocity_kmh
-        #------------------------------------------------------------------------------------------------------------------
+
+        if done:
+            self.final_score = self.statistics_manager.route_record["score_composed"]
+
         #reset is blocked if car is moving
         if self.cur_velocity > 0 and self.blocked:
             self.blocked = False
@@ -345,7 +343,7 @@ class CarlaEnv(object):
         self.n_step_cols = 0
         return state, reward, done, [self.statistics_manager.route_record['route_percentage'], self.n_collisions,
                                      self.n_tafficlight_violations, self.n_stopsign_violations, self.n_route_violations,
-                                     self.n_vehicle_blocked]
+                                     self.n_vehicle_blocked,self.final_score]
 
     def _cleanup(self):
         """
@@ -923,30 +921,36 @@ def train_PPO(args):
         # if iters % 50 == 0:
         #     kill_carla()
         #     launch_carla_server(args.world_port, gpu=3, boot_time=5)
-        with CarlaEnv(args) as env:
-            s, _, _, _ = env.reset(False, False, iters)
-            t = 0
-            episode_reward = 0
-            done = False
-            rewards = []
-            eps_frames = []
-            eps_mes = []
-            actions = []
-            actions_log_probs = []
-            states_p = []
-            while not done:
-                a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
-                s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
+        try:
+            with CarlaEnv(args) as env:
+                s, _, _, _ = env.reset(False, False, iters)
+                t = 0
+                episode_reward = 0
+                done = False
+                rewards = []
+                eps_frames = []
+                eps_mes = []
+                actions = []
+                actions_log_probs = []
+                states_p = []
+                while not done:
+                    a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
+                    s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
 
-                eps_frames.append(format_frame(s[0]).detach().clone())
-                eps_mes.append(format_mes(s[1:]).detach().clone())
-                actions.append(a.detach().clone())
-                actions_log_probs.append(a_log_prob.detach().clone())
-                rewards.append(copy.deepcopy(reward))
-                states_p.append(copy.deepcopy(s_prime))
-                s = s_prime
-                t += 1
-                episode_reward += reward
+                    eps_frames.append(format_frame(s[0]).detach().clone())
+                    eps_mes.append(format_mes(s[1:]).detach().clone())
+                    actions.append(a.detach().clone())
+                    actions_log_probs.append(a_log_prob.detach().clone())
+                    rewards.append(copy.deepcopy(reward))
+                    states_p.append(copy.deepcopy(s_prime))
+                    s = s_prime
+                    t += 1
+                    episode_reward += reward
+        except Exception as e:
+            print (e)
+            time.sleep(10)
+            continue
+
         if t == 1:
             continue
         print("Episode reward: " + str(episode_reward))
@@ -962,6 +966,7 @@ def train_PPO(args):
         wandb.log({"number_of_stopsign_violations": info[3]})
         wandb.log({"number_of_route_violations": info[4]})
         wandb.log({"number_of_times_vehicle_blocked": info[5]})
+        wandb.log({"final score": info[6]})
         wandb.log({"timesteps before termination": t})
         wandb.log({"iteration": iters})
 

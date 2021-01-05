@@ -159,6 +159,7 @@ class CarlaEnv(object):
         self.n_stopsign_violations = 0
         self.n_route_violations = 0
         self.n_vehicle_blocked = 0
+        self.final_score = None
         self._time_start = time.time()
 
         # create sensor queues
@@ -324,20 +325,14 @@ class CarlaEnv(object):
             done = False
             self.events.append([TrafficEventType.ROUTE_COMPLETION, self.d_completed])
 
-        # print(self.events)
         #get reward information
         self.statistics_manager.compute_route_statistics(time.time(), self.events)
-        #------------------------------------------------------------------------------------------------------------------
         reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
-
         self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
-        #reward = self.statistics_manager.route_record["score_composed"]
-        #self.events.clear()
-        #------------------------------------------------------------------------------------------------------------------
-        # reward = 1000*(self.d_completed - self.statistics_manager.prev_d_completed) + 0.05*(velocity_kmh-self.statistics_manager.prev_velocity_kmh) - 10*self.statistics_manager.route_record["score_penalty"]
-        # self.statistics_manager.prev_d_completed = self.d_completed
-        # self.statistics_manager.prev_velocity_kmh = velocity_kmh
-        #------------------------------------------------------------------------------------------------------------------
+
+        if done:
+            self.final_score = self.statistics_manager.route_record["score_composed"]
+
         #reset is blocked if car is moving
         if self.cur_velocity > 0 and self.blocked:
             self.blocked = False
@@ -345,7 +340,7 @@ class CarlaEnv(object):
         self.n_step_cols = 0
         return state, reward, done, [self.statistics_manager.route_record['route_percentage'], self.n_collisions,
                                      self.n_tafficlight_violations, self.n_stopsign_violations, self.n_route_violations,
-                                     self.n_vehicle_blocked]
+                                     self.n_vehicle_blocked, self.final_score]
 
     def _cleanup(self):
         """
@@ -991,32 +986,38 @@ def train_PPO(args):
         # if iters % 50 == 0:
         #     kill_carla()
         #     launch_carla_server(args.world_port, gpu=3, boot_time=5)
-        with CarlaEnv(args) as env:
-            s, _, _, _ = env.reset(False, False, iters)
-            t = 0
-            episode_reward = 0
-            done = False
-            rewards = []
-            eps_frames = []
-            eps_mes = []
-            actions = []
-            actions_log_probs = []
-            states_p = []
-            while not done:
-                a, a_log_prob = prev_policy.choose_action(format_frame(s[0],vae), format_mes(s[1:]))
-                s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
+        try:
+            with CarlaEnv(args) as env:
+                s, _, _, _ = env.reset(False, False, iters)
+                t = 0
+                episode_reward = 0
+                done = False
+                rewards = []
+                eps_frames = []
+                eps_mes = []
+                actions = []
+                actions_log_probs = []
+                states_p = []
+                while not done:
+                    a, a_log_prob = prev_policy.choose_action(format_frame(s[0],vae), format_mes(s[1:]))
+                    s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
 
-                # if reward != 0:
-                #     print('reward is:', reward)
-                eps_frames.append(format_frame(s[0],vae).detach().clone())
-                eps_mes.append(format_mes(s[1:]).detach().clone())
-                actions.append(a.detach().clone())
-                actions_log_probs.append(a_log_prob.detach().clone())
-                rewards.append(copy.deepcopy(reward))
-                states_p.append(copy.deepcopy(s_prime))
-                s = s_prime
-                t += 1
-                episode_reward += reward
+                    # if reward != 0:
+                    #     print('reward is:', reward)
+                    eps_frames.append(format_frame(s[0],vae).detach().clone())
+                    eps_mes.append(format_mes(s[1:]).detach().clone())
+                    actions.append(a.detach().clone())
+                    actions_log_probs.append(a_log_prob.detach().clone())
+                    rewards.append(copy.deepcopy(reward))
+                    states_p.append(copy.deepcopy(s_prime))
+                    s = s_prime
+                    t += 1
+                    episode_reward += reward
+        except Exception as e:
+            print (e)
+            time.sleep(10)
+            continue
+
         if t == 1:
             continue
         print("Episode reward: " + str(episode_reward))
@@ -1032,6 +1033,7 @@ def train_PPO(args):
         wandb.log({"number_of_stopsign_violations": info[3]})
         wandb.log({"number_of_route_violations": info[4]})
         wandb.log({"number_of_times_vehicle_blocked": info[5]})
+        wandb.log({"final score": info[6]})
         wandb.log({"timesteps before termination": t})
         wandb.log({"iteration": iters})
 
@@ -1072,112 +1074,6 @@ def train_PPO(args):
             torch.save(policy.state_dict(), "policy_state_dictionary.pt")
         prev_policy.load_state_dict(policy.state_dict())
 
-
-def run_model(args):
-    n_iters = 20
-    n_epochs = 50
-    avg_t = 0
-    moving_avg = 0
-
-    encoded_vector_size = 128
-    n_states = 8
-    #currently the action array will be [throttle, steer]
-    n_actions = 2
-
-    action_std = 0.5
-    #init models
-    policy = PPO_Agent(n_states,encoded_vector_size, n_actions, action_std).to(device)
-    policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
-    policy.eval()
-
-    vae = VAE()
-    if encoded_vector_size == 128:
-        vae.load_state_dict(torch.load("dim=127VAE_state_dictionary.pt"))
-    elif encoded_vector_size == 64:
-        vae.load_state_dict(torch.load("dim=64VAE_state_dictionary.pt"))
-    else:
-        print ("no VAE with this dimension")
-        return
-    vae.eval()
-
-    for iters in range(n_iters):
-        # if iters % 50 == 0:
-        #     kill_carla()
-        #     launch_carla_server(args.world_port, gpu=3, boot_time=5)
-        with CarlaEnv(args) as env:
-            s, _, _, _ = env.reset(False, True, iters)
-            t = 0
-            episode_reward = 0
-            done = False
-            rewards = []
-            while not done:
-                a, a_log_prob = policy.choose_action(format_frame(s[0],vae), format_mes(s[1:]))
-                s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
-
-                rewards.append(reward)
-                s = s_prime
-                t += 1
-                episode_reward += reward
-        if t == 1:
-            continue
-        print("Episode reward: " + str(episode_reward))
-        print("Percent completed: " + str(info[0]))
-        avg_t += t
-        moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
-
-
-def random_baseline(args):
-    wandb.init(project='PPO_Carla_Navigation')
-    n_iters = 10000
-    n_epochs = 50
-    avg_t = 0
-    moving_avg = 0
-
-    config = wandb.config
-    #config.learning_rate = lr
-
-    n_states = 8
-    #currently the action array will be [throttle, steer]
-    n_actions = 2
-
-    action_std = 0.5
-
-    wandb.watch(policy)
-
-    for iters in range(n_iters):
-        # if iters % 50 == 0:
-        #     kill_carla()
-        #     launch_carla_server(args.world_port, gpu=3, boot_time=5)
-        with CarlaEnv(args) as env:
-            s, _, _, _ = env.reset(False, False, iters)
-            t = 0
-            episode_reward = 0
-            done = False
-            rewards = []
-            while not done:
-                s_prime, reward, done, info = env.step(action=[[random.uniform(-1, 1),random.uniform(-1, 1)]], timeout=2)
-
-                rewards.append(reward)
-                s = s_prime
-                t += 1
-                episode_reward += reward
-        if t == 1:
-            continue
-        print("Episode reward: " + str(episode_reward))
-        print("Percent completed: " + str(info[0]))
-        avg_t += t
-        moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
-
-        wandb.log({"episode_reward (suggested reward w/ ri)": episode_reward})
-        wandb.log({"average_reward (suggested reward w/ ri)": moving_avg})
-        wandb.log({"percent_completed": info[0]})
-        wandb.log({"number_of_collisions": info[1]})
-        wandb.log({"number_of_trafficlight_violations": info[2]})
-        wandb.log({"number_of_stopsign_violations": info[3]})
-        wandb.log({"number_of_route_violations": info[4]})
-        wandb.log({"number_of_times_vehicle_blocked": info[5]})
-        wandb.log({"timesteps before termination": t})
-        wandb.log({"iteration": iters})
 
 def launch_client(args):
     client = carla.Client(args.host, args.world_port)
