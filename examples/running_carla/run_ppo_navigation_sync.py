@@ -254,6 +254,16 @@ class CarlaEnv(object):
         self.at_waypoint = self.route_waypoints[closest_index]
         self.followed_waypoints.append(self.at_waypoint)
 
+        #----------------------DEBUGGING STUFF--------------------------------------------
+        self.at_waypoint_unformatted = self.route_waypoints_unformatted[closest_index]
+        print ("closest waypoint: (" + str(self.at_waypoint_unformatted.transform.location.x) + "," + str(self.at_waypoint_unformatted.transform.location.y) + "," + str(self.at_waypoint_unformatted.transform.location.z) + ")")
+        print ("current position: (" + str(self._car_agent.get_location().x) + "," + str(self._car_agent.get_location().y) + "," + str(self._car_agent.get_location().z) + ")")
+        print ("Next waypoint at 0.1 meters: " + str(self.at_waypoint_unformatted.next(0.1)))
+        print ("Next waypoint at 0.5 meters: " + str(self.at_waypoint_unformatted.next(0.5)))
+        print ("Next waypoint at 1 meter: " + str(self.at_waypoint_unformatted.next(1)))
+        print ("\n")
+        #----------------------DEBUGGING STUFF--------------------------------------------
+
         # get command of current waypoint
         command_encoded = self.command2onehot.get(str(self.route_commands[closest_index]))
 
@@ -780,8 +790,8 @@ class CarlaEnv(object):
         return am_ab > 0 and am_ab < ab_ab and am_ad > 0 and am_ad < ad_ad
 
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-# device = torch.device("cpu")
+#device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 
 
 class PPO_Agent(nn.Module):
