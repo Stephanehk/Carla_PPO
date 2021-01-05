@@ -15,7 +15,9 @@ import torch.nn as nn
 from torch.optim import Adam
 from torch.distributions import MultivariateNormal
 import wandb
+import copy
 from shapely.geometry import LineString
+
 from traffic_events import TrafficEventType
 from statistics_manager import StatisticManager
 #IK this is bad, fix file path stuff later :(
@@ -78,7 +80,7 @@ class CarlaEnv(object):
         self._cleanup()
         self.set_sync_mode(False)
 
-    def init(self, randomize=False, save_video=True, i=0):
+    def init(self, randomize=False, save_video=False, i=0):
         self._settings = self._world.get_settings()
         #get traffic light and stop sign info
         self._list_traffic_lights = []
@@ -847,7 +849,7 @@ class PPO_Agent(nn.Module):
         #state = torch.FloatTensor(state).to(device)
         with torch.no_grad():
             mean = self.actor(frame, mes)
-            cov_matrix = torch.diag(self.action_var)
+            cov_matrix = torch.diag(self.action_var).to(device)
             gauss_dist = MultivariateNormal(mean, cov_matrix)
             action = gauss_dist.sample()
             action_log_prob = gauss_dist.log_prob(action)
@@ -936,7 +938,7 @@ def train_PPO(args):
                 a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
                 s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
 
-                eps_frames.append(format_frame(s[0],vae).detach().clone())
+                eps_frames.append(format_frame(s[0]).detach().clone())
                 eps_mes.append(format_mes(s[1:]).detach().clone())
                 actions.append(a.detach().clone())
                 actions_log_probs.append(a_log_prob.detach().clone())
@@ -1109,9 +1111,9 @@ def launch_client(args):
 def main(args):
     # Create client outside of Carla environment to avoid creating zombie clients
     args.client = launch_client(args)
-    #train_PPO(args)
+    train_PPO(args)
     #random_baseline(args)
-    run_model(args)
+    #run_model(args)
 
 if __name__ == '__main__':
     import argparse

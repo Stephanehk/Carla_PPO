@@ -904,7 +904,7 @@ class PPO_Agent(nn.Module):
         #state = torch.FloatTensor(state).to(device)
         with torch.no_grad():
             mean = self.actor_(frame, mes)
-            cov_matrix = torch.diag(self.action_var)
+            cov_matrix = torch.diag(self.action_var).to(device)
             gauss_dist = MultivariateNormal(mean, cov_matrix)
             action = gauss_dist.sample()
             action_log_prob = gauss_dist.log_prob(action)
@@ -978,7 +978,7 @@ def train_PPO(args):
     vae = VAE()
     if encoded_vector_size == 128:
         vae.load_state_dict(torch.load("dim=127VAE_state_dictionary.pt"))
-    elif encoded_vector_size == 64:
+    elif encoded_vector_size == 32:
         vae.load_state_dict(torch.load("dim=64VAE_state_dictionary.pt"))
     else:
         print ("no VAE with this dimension")
