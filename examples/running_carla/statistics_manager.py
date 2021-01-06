@@ -6,9 +6,10 @@ from traffic_events import TrafficEventType
 
 class StatisticManager:
 
-    def __init__(self, trajectory):
+    def __init__(self, trajectory,waypoints):
         self.route_record = {}
         self.route_record['route_length'] = self.compute_route_length(trajectory)
+        self._accum_meters = compute_accum_length(_waypoints)
         self.prev_score = 0
         self.prev_d_completed = 0
         self.prev_velocity_kmh = 0
@@ -19,6 +20,8 @@ class StatisticManager:
         self.PENALTY_STOP = 0.80
         self.prev_route_infractions = 0
         self.prev_route_completion = 0
+        self._current_index = 0
+        self._wsize = 2 #Im not sure what this parameter controls
 
     def compute_route_length(self, trajectory):
         route_length = 0.0
@@ -35,26 +38,41 @@ class StatisticManager:
 
         return route_length
 
-    def compute_d2target(self,trajectory):
-        route_length = 0.0
-        previous_transform = None
-        seen_waypoints = []
-        for transform in trajectory:
-            if previous_transform:
-                x, y, z = transform
-                prev_x, prev_y, prev_z = previous_transform
-                dist = math.sqrt((x-prev_x)*(x-prev_x) +
-                                 (y-prev_y)*(y-prev_y) +
-                                 (z-prev_z)*(z-prev_z))
-                if transform in seen_waypoints:
-                    route_length -= dist
-                else:
-                    route_length += dist
+    def compute_accum_length(self,_waypoints):
+        accum_meters = []
+        prev_wp = _waypoints[0]
+        for i, wp in enumerate(_waypoints):
+            d = wp.distance(prev_wp)
+            if i > 0:
+                accum = accum_meters[i - 1]
+            else:
+                accum = 0
 
-            previous_transform = transform
-            seen_waypoints.append(transform)
+            accum_meters.append(d + accum)
+            prev_wp = wp
+        return accum_meters
 
-        return route_length
+    def segment_completed (self,_waypoints,_map,actor_location):
+        completed = False
+        for index in range(self._current_index, min(self._current_index + self._wsize + 1, self._route_length)):
+            # Get the dot product to know if it has passed this location
+            ref_waypoint = _waypoints[index]
+            wp = _map.get_waypoint(ref_waypoint)
+            wp_dir = wp.transform.get_forward_vector()          # Waypoint's forward vector
+            wp_veh = actor_location - ref_waypoint                    # vector waypoint - vehicle
+            dot_ve_wp = wp_veh.x * wp_dir.x + wp_veh.y * wp_dir.y + wp_veh.z * wp_dir.z
+
+            if dot_ve_wp > 0:
+                # good! segment completed!
+                self._current_index = index
+                self._percentage_route_completed = 100.0 * float(self._accum_meters[self._current_index]) \
+                    / float(self._accum_meters[-1])
+                self.route_record['route_percentage'] = self._percentage_route_completed
+
+        d2target = self.route_record['route_length'] - float(self._accum_meters[-1])
+        return completed, d2target
+
+
 
     def compute_route_statistics(self, duration, trajector_events):
             """
@@ -108,10 +126,7 @@ class StatisticManager:
                     target_reached = True
                 elif event[0] == TrafficEventType.ROUTE_COMPLETION:
                     if not target_reached:
-                        score_route = (event[1]/self.route_record['route_length'])*100
-                        #score_route = (event[1]/self.route_record['route_length'])*100 - self.prev_route_completion
-                        self.prev_route_completion = (event[1]/self.route_record['route_length'])*100
-
+                        score_route = self.route_record['route_percentage']
 
             # update route scores
             self.route_record['score_route'] = score_route
@@ -123,8 +138,6 @@ class StatisticManager:
                     self.route_record['score_composed'] = score_route / (score_penalty * route_infraction)
                 except ZeroDivisionError:
                     self.route_record['score_composed'] = score_route
-
-            self.route_record['route_percentage'] = self.prev_route_completion
 
             # update status
             if target_reached:
