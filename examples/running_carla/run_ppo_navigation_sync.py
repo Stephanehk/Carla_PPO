@@ -276,13 +276,13 @@ class CarlaEnv(object):
         #get done information
         if self._tick > self.MAX_EP_LENGTH or self.colllided_w_static:
             done = True
-            self.events.append([TrafficEventType.ROUTE_COMPLETION, self.d_completed])
-        elif d2target < 0.1:
+            self.events.append([TrafficEventType.ROUTE_COMPLETION])
+        elif self.statistics_manager.route_record['route_percentage'] > 99:
             done = True
             self.events.append([TrafficEventType.ROUTE_COMPLETED])
         else:
             done = False
-            self.events.append([TrafficEventType.ROUTE_COMPLETION, self.d_completed])
+            self.events.append([TrafficEventType.ROUTE_COMPLETION])
 
         # print(self.events)
         #get reward information

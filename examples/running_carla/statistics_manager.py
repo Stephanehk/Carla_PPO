@@ -9,7 +9,7 @@ class StatisticManager:
     def __init__(self, trajectory,waypoints):
         self.route_record = {}
         self.route_record['route_length'] = self.compute_route_length(trajectory)
-        self._accum_meters = compute_accum_length(_waypoints)
+        self._accum_meters = self.compute_accum_length(waypoints)
         self.prev_score = 0
         self.prev_d_completed = 0
         self.prev_velocity_kmh = 0
@@ -22,6 +22,7 @@ class StatisticManager:
         self.prev_route_completion = 0
         self._current_index = 0
         self._wsize = 2 #Im not sure what this parameter controls
+        self.route_record['route_percentage'] = 0
 
     def compute_route_length(self, trajectory):
         route_length = 0.0
@@ -42,7 +43,7 @@ class StatisticManager:
         accum_meters = []
         prev_wp = _waypoints[0]
         for i, wp in enumerate(_waypoints):
-            d = wp.distance(prev_wp)
+            d = wp.transform.location.distance(prev_wp.transform.location)
             if i > 0:
                 accum = accum_meters[i - 1]
             else:
@@ -54,12 +55,12 @@ class StatisticManager:
 
     def segment_completed (self,_waypoints,_map,actor_location):
         completed = False
-        for index in range(self._current_index, min(self._current_index + self._wsize + 1, self._route_length)):
+        for index in range(self._current_index, min(self._current_index + self._wsize + 1, self.route_record['route_length'])):
             # Get the dot product to know if it has passed this location
             ref_waypoint = _waypoints[index]
-            wp = _map.get_waypoint(ref_waypoint)
+            wp = _map.get_waypoint(ref_waypoint.transform.location)
             wp_dir = wp.transform.get_forward_vector()          # Waypoint's forward vector
-            wp_veh = actor_location - ref_waypoint                    # vector waypoint - vehicle
+            wp_veh = actor_location - ref_waypoint.transform.location                    # vector waypoint - vehicle
             dot_ve_wp = wp_veh.x * wp_dir.x + wp_veh.y * wp_dir.y + wp_veh.z * wp_dir.z
 
             if dot_ve_wp > 0:
