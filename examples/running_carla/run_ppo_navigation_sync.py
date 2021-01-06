@@ -258,9 +258,9 @@ class CarlaEnv(object):
         self.at_waypoint_unformatted = self.route_waypoints_unformatted[closest_index]
         print ("closest waypoint: (" + str(self.at_waypoint_unformatted.transform.location.x) + "," + str(self.at_waypoint_unformatted.transform.location.y) + "," + str(self.at_waypoint_unformatted.transform.location.z) + ")")
         print ("current position: (" + str(self._car_agent.get_location().x) + "," + str(self._car_agent.get_location().y) + "," + str(self._car_agent.get_location().z) + ")")
-        print ("Next waypoint at 0.1 meters: " + str(self.at_waypoint_unformatted.next(0.1)))
-        print ("Next waypoint at 0.5 meters: " + str(self.at_waypoint_unformatted.next(0.5)))
-        print ("Next waypoint at 1 meter: " + str(self.at_waypoint_unformatted.next(1)))
+        print ("Next waypoint at 0.1 meters: (" + str(self.at_waypoint_unformatted.next(0.1).transform.location.x) + "," + str(self.at_waypoint_unformatted.next(0.1).transform.location.y) + "," + str(self.at_waypoint_unformatted.next(0.1).transform.location.z) + ")")
+        print ("Next waypoint at 0.5 meters: (" + str(self.at_waypoint_unformatted.next(0.5).transform.location.x) + "," + str(self.at_waypoint_unformatted.next(0.5).transform.location.y) + "," + str(self.at_waypoint_unformatted.next(0.5).transform.location.z) + ")")
+        print ("Next waypoint at 1 meters: (" + str(self.at_waypoint_unformatted.next(1).transform.location.x) + "," + str(self.at_waypoint_unformatted.next(1).transform.location.y) + "," + str(self.at_waypoint_unformatted.next(1).transform.location.z) + ")")
         print ("\n")
         #----------------------DEBUGGING STUFF--------------------------------------------
 
@@ -933,6 +933,7 @@ def train_PPO(args):
         #     launch_carla_server(args.world_port, gpu=3, boot_time=5)
         try:
             with CarlaEnv(args) as env:
+                print ("------------------------------------------------------------")
                 s, _, _, _ = env.reset(False, False, iters)
                 t = 0
                 episode_reward = 0
