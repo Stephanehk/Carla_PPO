@@ -150,7 +150,7 @@ class CarlaEnv(object):
             self.target = np.random.choice(self._map.get_spawn_points())
         self.get_route()
         # create statistics manager
-        self.statistics_manager = StatisticManager(self.route_waypoints)
+        self.statistics_manager = StatisticManager(self.route_waypoints,self.route_waypoints_unformatted)
         # get all initial waypoints
         self._pre_ego_waypoint = self._map.get_waypoint(self._car_agent.get_location())
         # some metrics for debugging
@@ -248,63 +248,12 @@ class CarlaEnv(object):
         transform = self._car_agent.get_transform()
         velocity = self._car_agent.get_velocity()
 
+        is_completed, d2target = self.statistics_manager.segment_completed(self.route_waypoints_unformatted, self._map, transform.location)
+
         # set current waypoint to closest waypoint to agent position
-        closest_index = self.route_kdtree.query([[self._car_agent.get_location().x, self._car_agent.get_location().y,
-                                                  self._car_agent.get_location().z]], k=1)[1][0][0]
-        self.at_waypoint = self.route_waypoints[closest_index]
-        self.followed_waypoints.append(self.at_waypoint)
-
-        #----------------------DEBUGGING STUFF--------------------------------------------
-        self.at_waypoint_unformatted = self.route_waypoints_unformatted[closest_index]
-        print ("closest waypoint: (" + str(self.at_waypoint_unformatted.transform.location.x) + "," + str(self.at_waypoint_unformatted.transform.location.y) + "," + str(self.at_waypoint_unformatted.transform.location.z) + ")")
-        print ("current position: (" + str(self._car_agent.get_location().x) + "," + str(self._car_agent.get_location().y) + "," + str(self._car_agent.get_location().z) + ")")
-        print ("Next waypoint at 0.1 meters: (" + str(self.at_waypoint_unformatted.next(0.1).transform.location.x) + "," + str(self.at_waypoint_unformatted.next(0.1).transform.location.y) + "," + str(self.at_waypoint_unformatted.next(0.1).transform.location.z) + ")")
-        print ("Next waypoint at 0.5 meters: (" + str(self.at_waypoint_unformatted.next(0.5).transform.location.x) + "," + str(self.at_waypoint_unformatted.next(0.5).transform.location.y) + "," + str(self.at_waypoint_unformatted.next(0.5).transform.location.z) + ")")
-        print ("Next waypoint at 1 meters: (" + str(self.at_waypoint_unformatted.next(1).transform.location.x) + "," + str(self.at_waypoint_unformatted.next(1).transform.location.y) + "," + str(self.at_waypoint_unformatted.next(1).transform.location.z) + ")")
-        print ("\n")
-        #----------------------DEBUGGING STUFF--------------------------------------------
-
+        closest_index = self.statistics_manager._current_index
         # get command of current waypoint
         command_encoded = self.command2onehot.get(str(self.route_commands[closest_index]))
-
-        # get next target waypoint assuming they are ordered by the route planner
-        self.target_waypoint = self.route_waypoints[self.target_waypoint_idx]
-
-        if self.at_waypoint == self.target_waypoint:
-            self.followed_target_waypoints.append(self.target_waypoint)
-            self.target_waypoint_idx += 1
-            self.target_waypoint = self.route_waypoints[self.target_waypoint_idx]
-            car_agent_trigger_pos = [self._car_agent.get_location().x, self._car_agent.get_location().y, self._car_agent.get_location().z]
-            self.dist_to_target_wp_tr = self.statistics_manager.compute_route_length([car_agent_trigger_pos, self.target_waypoint])
-
-        car_agent_x = self._car_agent.get_location().x
-        car_agent_y = self._car_agent.get_location().y
-        car_agent_z = self._car_agent.get_location().z
-
-        target_x, target_y, target_z = self.target_waypoint
-        dist_x2 = (car_agent_x - target_x)**2
-        dist_y2 = (car_agent_y - target_y)**2
-        dist_z2 = (car_agent_z - target_z)**2
-        dist_to_target_wp = math.sqrt(dist_x2 + dist_y2 + dist_z2)
-        # input(dist_to_next_wp)
-
-        if self.dist_to_target_wp_tr:
-            # print(self.dist_to_target_wp_tr)
-            # print(dist_to_target_wp)
-            dist_toward_target_wp = self.dist_to_target_wp_tr - dist_to_target_wp
-        else:
-            dist_toward_target_wp = 0
-
-        # compute completed distance based on followed target waypoints TODO change to include negative progress
-        # print(self.statistics_manager.compute_route_length(self.followed_target_waypoints))
-        # print(dist_toward_target_wp)
-        self.d_completed = (self.statistics_manager.compute_route_length(self.followed_target_waypoints) + dist_toward_target_wp)
-        # if self.at_waypoint == self.target_waypoint:
-        #     print('completed distance is:', self.d_completed)
-        # print('completed distance is:', self.d_completed)
-        # get distance to destination TODO change formula for this
-        d2target = self.statistics_manager.route_record["route_length"] - \
-                   self.d_completed
 
         velocity_kmh = int(3.6*np.sqrt(np.power(velocity.x, 2) + np.power(velocity.y, 2) + np.power(velocity.z, 2)))
         velocity_mag = np.sqrt(np.power(velocity.x, 2) + np.power(velocity.y, 2) + np.power(velocity.z, 2))
