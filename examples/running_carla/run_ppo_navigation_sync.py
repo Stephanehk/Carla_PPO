@@ -352,8 +352,9 @@ class CarlaEnv(object):
         self.route_kdtree = KDTree(np.array(self.route_waypoints))
 
     def process_img(self, img, height, width, save_video):
-        img_reshaped = np.frombuffer(img.raw_data, dtype='uint8').reshape(height, width, 4)
+        img_reshaped = np.frombuffer(img.raw_data, dtype='uint8')
         rgb_reshaped = img_reshaped[:, :, :3]
+        rgb_reshaped = cv2.resize(rgb_reshaped,(height,width))
         rgb_f = rgb_reshaped[:, :, ::-1]
         if save_video and self.started_sim and 'route_percentage' in self.statistics_manager.route_record:
             #img = np.frombuffer(img.raw_data, dtype='uint8').reshape(height, width, 4)
@@ -366,8 +367,8 @@ class CarlaEnv(object):
             #reward
             cv2.putText(rgb_mat, str(self.reward), (2,25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
 
-            rgb = rgb.reshape(480+60,640,3)
-            rgb_mat = cv2.resize(rgb_mat,(height,width))
+            # rgb = rgb.reshape(480+60,640,3)
+            rgb_mat = cv2.resize(rgb_mat,(480+60,640))
             self.out.write(rgb_mat)
             #cv2.imwrite("/scratch/cluster/stephane/cluster_quickstart/examples/running_carla/episode_footage/frame_"+str(iter)+str(self.n_img)+".png",rgb)
             self.n_img+=1
