@@ -190,7 +190,7 @@ class CarlaEnv(object):
             self._car_agent = self._world.try_spawn_actor(self._car_agent_model, self._start_pose)
         self._actor_dict['car_agent'].append(self._car_agent)
 
-    def _setup_sensors(self, save_video, height=80, width=80, fov=10, FPS=60, iter=0):
+    def _setup_sensors(self, save_video, height=480, width=640, fov=10, FPS=60, iter=0):
         sensor_relative_transform = carla.Transform(carla.Location(x=2.5, z=0.7))
 
         # get camera sensor
@@ -289,6 +289,7 @@ class CarlaEnv(object):
         self.statistics_manager.compute_route_statistics(time.time(), self.events)
         #------------------------------------------------------------------------------------------------------------------
         reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
+        self.reward = reward
 
         self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
 
@@ -351,21 +352,21 @@ class CarlaEnv(object):
         self.route_kdtree = KDTree(np.array(self.route_waypoints))
 
     def process_img(self, img, height, width, save_video):
-        img = np.frombuffer(img.raw_data, dtype='uint8').reshape(height, width, 4)
-        rgb = img[:, :, :3]
-        rgb_f = rgb[:, :, ::-1]
+        img_reshaped = np.frombuffer(img.raw_data, dtype='uint8').reshape(height, width, 4)
+        rgb_reshaped = img_reshaped[:, :, :3]
+        rgb_f = rgb_reshaped[:, :, ::-1]
         if save_video and self.started_sim and 'route_percentage' in self.statistics_manager.route_record:
+            #img = np.frombuffer(img.raw_data, dtype='uint8').reshape(height, width, 4)
+            rgb = np.frombuffer(img.raw_data, dtype='uint8').reshape(480, 640, 4)
+            rgb = rgb[:, :, :3]
             #percent complete
             rgb_mat = cv2.UMat(rgb)
             rgb_mat = cv2.copyMakeBorder(rgb_mat, 60,0,0,0, cv2.BORDER_CONSTANT, None, 0)
-            cv2.putText(rgb_mat, str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
-            #high level command
-            #cv2.putText(rgb_mat, self.high_level_command, (2,25), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
-            #closest waypoint (x,y,z)
-            #cv2.putText(rgb_mat, str(self.closest_waypoint), (2,40), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
-            #distance 2 waypoint
-            cv2.putText(rgb_mat, str(self.d_completed), (2,55), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
-            rgb = rgb.reshape(height+60,width,3)
+            cv2.putText(rgb_mat, str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+            #reward
+            cv2.putText(rgb_mat, str(self.reward), (2,25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+
+            rgb = rgb.reshape(480+60,640,3)
             rgb_mat = cv2.resize(rgb_mat,(height,width))
             self.out.write(rgb_mat)
             #cv2.imwrite("/scratch/cluster/stephane/cluster_quickstart/examples/running_carla/episode_footage/frame_"+str(iter)+str(self.n_img)+".png",rgb)
@@ -880,35 +881,35 @@ def train_PPO(args):
         # if iters % 50 == 0:
         #     kill_carla()
         #     launch_carla_server(args.world_port, gpu=3, boot_time=5)
-        with CarlaEnv(args) as env:
-            print ("------------------------------------------------------------")
-            s, _, _, _ = env.reset(False, False, iters)
-            t = 0
-            episode_reward = 0
-            done = False
-            rewards = []
-            eps_frames = []
-            eps_mes = []
-            actions = []
-            actions_log_probs = []
-            states_p = []
-            while not done:
-                a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
-                s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
+        try:
+            with CarlaEnv(args) as env:
+                s, _, _, _ = env.reset(False, False, iters)
+                t = 0
+                episode_reward = 0
+                done = False
+                rewards = []
+                eps_frames = []
+                eps_mes = []
+                actions = []
+                actions_log_probs = []
+                states_p = []
+                while not done:
+                    a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
+                    s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
 
-                eps_frames.append(format_frame(s[0]).detach().clone())
-                eps_mes.append(format_mes(s[1:]).detach().clone())
-                actions.append(a.detach().clone())
-                actions_log_probs.append(a_log_prob.detach().clone())
-                rewards.append(copy.deepcopy(reward))
-                states_p.append(copy.deepcopy(s_prime))
-                s = s_prime
-                t += 1
-                episode_reward += reward
-        # except Exception as e:
-        #     print (e)
-        #     time.sleep(10)
-        #     continue
+                    eps_frames.append(format_frame(s[0]).detach().clone())
+                    eps_mes.append(format_mes(s[1:]).detach().clone())
+                    actions.append(a.detach().clone())
+                    actions_log_probs.append(a_log_prob.detach().clone())
+                    rewards.append(copy.deepcopy(reward))
+                    states_p.append(copy.deepcopy(s_prime))
+                    s = s_prime
+                    t += 1
+                    episode_reward += reward
+        except Exception as e:
+            print (e)
+            time.sleep(10)
+            continue
 
         if t == 1:
             continue
@@ -963,7 +964,7 @@ def train_PPO(args):
             #wandb.log({"loss": loss.mean()})
 
         if iters % 50 == 0:
-            torch.save(policy.state_dict(), "policy_state_dictionary.pt")
+            torch.save(policy.state_dict(), "vanilla_policy_state_dictionary.pt")
         prev_policy.load_state_dict(policy.state_dict())
 
 
@@ -979,7 +980,7 @@ def run_model(args):
     action_std = 0.5
     #init models
     policy = PPO_Agent(n_states, n_actions, action_std).to(device)
-    policy.load_state_dict(torch.load("policy_state_dictionary.pt"))
+    policy.load_state_dict(torch.load("vanilla_policy_state_dictionary.pt"))
     policy.eval()
 
     #wandb.watch(policy)
