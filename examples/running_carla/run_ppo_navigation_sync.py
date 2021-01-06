@@ -303,7 +303,7 @@ class CarlaEnv(object):
         self.n_step_cols = 0
         return state, reward, done, [self.statistics_manager.route_record['route_percentage'], self.n_collisions,
                                      self.n_tafficlight_violations, self.n_stopsign_violations, self.n_route_violations,
-                                     self.n_vehicle_blocked,self.final_score]
+                                     self.n_vehicle_blocked,self.final_score,self.statistics_manager.route_record['route_length']]
 
     def _cleanup(self):
         """
@@ -352,7 +352,7 @@ class CarlaEnv(object):
         self.route_kdtree = KDTree(np.array(self.route_waypoints))
 
     def process_img(self, img, height, width, save_video):
-        img_reshaped = np.frombuffer(img.raw_data, dtype='uint8')
+        img_reshaped = np.frombuffer(img.raw_data, dtype='uint8').reshape(480, 640, 4)
         rgb_reshaped = img_reshaped[:, :, :3]
         rgb_reshaped = cv2.resize(rgb_reshaped,(height,width))
         rgb_f = rgb_reshaped[:, :, ::-1]
@@ -882,35 +882,35 @@ def train_PPO(args):
         # if iters % 50 == 0:
         #     kill_carla()
         #     launch_carla_server(args.world_port, gpu=3, boot_time=5)
-        #try:
-        with CarlaEnv(args) as env:
-            s, _, _, _ = env.reset(False, False, iters)
-            t = 0
-            episode_reward = 0
-            done = False
-            rewards = []
-            eps_frames = []
-            eps_mes = []
-            actions = []
-            actions_log_probs = []
-            states_p = []
-            while not done:
-                a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
-                s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
+        try:
+            with CarlaEnv(args) as env:
+                s, _, _, _ = env.reset(False, False, iters)
+                t = 0
+                episode_reward = 0
+                done = False
+                rewards = []
+                eps_frames = []
+                eps_mes = []
+                actions = []
+                actions_log_probs = []
+                states_p = []
+                while not done:
+                    a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
+                    s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
 
-                eps_frames.append(format_frame(s[0]).detach().clone())
-                eps_mes.append(format_mes(s[1:]).detach().clone())
-                actions.append(a.detach().clone())
-                actions_log_probs.append(a_log_prob.detach().clone())
-                rewards.append(copy.deepcopy(reward))
-                states_p.append(copy.deepcopy(s_prime))
-                s = s_prime
-                t += 1
-                episode_reward += reward
-        # except Exception as e:
-        #     print (e)
-        #     time.sleep(10)
-        #     continue
+                    eps_frames.append(format_frame(s[0]).detach().clone())
+                    eps_mes.append(format_mes(s[1:]).detach().clone())
+                    actions.append(a.detach().clone())
+                    actions_log_probs.append(a_log_prob.detach().clone())
+                    rewards.append(copy.deepcopy(reward))
+                    states_p.append(copy.deepcopy(s_prime))
+                    s = s_prime
+                    t += 1
+                    episode_reward += reward
+        except Exception as e:
+            print (e)
+            time.sleep(10)
+            continue
 
         if t == 1:
             continue
@@ -928,6 +928,7 @@ def train_PPO(args):
         wandb.log({"number_of_route_violations": info[4]})
         wandb.log({"number_of_times_vehicle_blocked": info[5]})
         wandb.log({"final score": info[6]})
+        wandb.log({"route length": info[7]})
         wandb.log({"timesteps before termination": t})
         wandb.log({"iteration": iters})
 
