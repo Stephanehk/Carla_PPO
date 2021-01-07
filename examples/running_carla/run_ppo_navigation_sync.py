@@ -211,7 +211,7 @@ class CarlaEnv(object):
         self.out = None
         if save_video:
             print ("saving video turned on")
-            self.draw_waypoints(self._map,self.route_waypoints_unformatted)
+            self.draw_waypoints(self._world,self.route_waypoints_unformatted)
             #self.cap = cv2.VideoCapture(0)
             fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
             self.out = cv2.VideoWriter("episode_footage/output_"+str(iter)+".avi", fourcc,FPS, (height+60,width))
