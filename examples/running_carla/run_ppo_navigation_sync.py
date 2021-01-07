@@ -329,6 +329,9 @@ class CarlaEnv(object):
         self._car_agent = None
         self._spectator = None
         # self._world.tick()
+        if self.out != None:
+            self.out.release()
+
 
     def set_sync_mode(self, sync):
         settings = self._world.get_settings()
