@@ -139,16 +139,16 @@ class CarlaEnv(object):
 
         self._current_velocity = None
 
-        self._spawn_car_agent()
-        print('car agent spawned')
-        self._setup_sensors(iter=i,save_video=self.save_video)
-
         # create random target to reach
         np.random.seed(6)
         self._target_pose = np.random.choice(self._map.get_spawn_points())
         while(self._target_pose is self._start_pose):
             self.target = np.random.choice(self._map.get_spawn_points())
         self.get_route()
+
+        self._spawn_car_agent()
+        print('car agent spawned')
+        self._setup_sensors(iter=i,save_video=self.save_video)
         # create statistics manager
         self.statistics_manager = StatisticManager(self.route_waypoints,self.route_waypoints_unformatted)
         # get all initial waypoints
