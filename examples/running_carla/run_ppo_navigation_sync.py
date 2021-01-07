@@ -80,7 +80,7 @@ class CarlaEnv(object):
         self._cleanup()
         self.set_sync_mode(False)
 
-    def init(self, randomize=False, save_video=False, i=0):
+    def init(self, randomize=False, save_video=True, i=0):
         self._settings = self._world.get_settings()
         #get traffic light and stop sign info
         self._list_traffic_lights = []
@@ -100,7 +100,7 @@ class CarlaEnv(object):
         self._current_index = 0
         self.final_score = None
         self.save_video = save_video
-
+        self.reward = None
         # vehicle, sensor
         self._actor_dict = collections.defaultdict(list)
         # self.rgb_img = np.reshape(np.zeros(80*80*3), [1, 80, 80, 3]) # DEBUG
@@ -247,6 +247,8 @@ class CarlaEnv(object):
 
         transform = self._car_agent.get_transform()
         velocity = self._car_agent.get_velocity()
+        #print (velocity)
+        #print (transform.location)
 
         is_completed, d2target = self.statistics_manager.segment_completed(self.route_waypoints_unformatted, self._map, transform.location)
 
@@ -356,7 +358,7 @@ class CarlaEnv(object):
         rgb_reshaped = img_reshaped[:, :, :3]
         rgb_reshaped = cv2.resize(rgb_reshaped,(height,width))
         rgb_f = rgb_reshaped[:, :, ::-1]
-        if save_video and self.started_sim and 'route_percentage' in self.statistics_manager.route_record:
+        if save_video and self.reward != None and self.started_sim and 'route_percentage' in self.statistics_manager.route_record:
             #img = np.frombuffer(img.raw_data, dtype='uint8').reshape(height, width, 4)
             rgb = np.frombuffer(img.raw_data, dtype='uint8').reshape(480, 640, 4)
             rgb = rgb[:, :, :3]
@@ -1078,9 +1080,9 @@ def launch_client(args):
 def main(args):
     # Create client outside of Carla environment to avoid creating zombie clients
     args.client = launch_client(args)
-    train_PPO(args)
+    #train_PPO(args)
     #random_baseline(args)
-    #run_model(args)
+    run_model(args)
 
 if __name__ == '__main__':
     import argparse
