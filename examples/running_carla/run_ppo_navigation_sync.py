@@ -190,16 +190,13 @@ class CarlaEnv(object):
             self._car_agent = self._world.try_spawn_actor(self._car_agent_model, self._start_pose)
         self._actor_dict['car_agent'].append(self._car_agent)
 
-    def draw_waypoints(self,world, waypoint, depth=6):
-        if depth < 0:
-            return
-        for w in waypoint.next(4.0):
+    def draw_waypoints(self,world, waypoints):
+        for w in waypoints:
             t = w.transform
             begin = t.location + carla.Location(z=0.5)
             angle = math.radians(t.rotation.yaw)
             end = begin + carla.Location(x=math.cos(angle), y=math.sin(angle))
             world.debug.draw_arrow(begin, end, arrow_size=0.3, life_time=1.0)
-            draw_waypoints(world, w, depth - 1)
 
     def _setup_sensors(self, save_video, height=480, width=640, fov=10, FPS=60, iter=0):
         sensor_relative_transform = carla.Transform(carla.Location(x=2.5, z=0.7))
