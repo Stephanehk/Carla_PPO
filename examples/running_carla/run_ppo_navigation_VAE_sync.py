@@ -799,7 +799,7 @@ class VAE(nn.Module):
     def reparameterize(self, mu, logvar):
         std = logvar.mul(0.5).exp_()
         # return torch.normal(mu, std)
-        esp = torch.randn(*mu.size())
+        esp = torch.randn(*mu.size()).to(device)
         z = mu + std * esp
         return z
 
@@ -1010,6 +1010,9 @@ def train_PPO(args):
         wandb.log({"timesteps before termination": t})
         wandb.log({"iteration": iters})
 
+        wandb.log({"throttle": a[0] for a in actions})
+        wandb.log({"steer": a[1] for a in actions})
+
         if len(eps_frames) == 1:
             continue
 
@@ -1041,7 +1044,7 @@ def train_PPO(args):
             optimizer.step()
             if i % 10 == 0:
                 print("    on epoch " + str(i))
-            #wandb.log({"loss": loss.mean()})
+            wandb.log({"loss": loss.mean()})
 
         if iters % 50 == 0:
             torch.save(policy.state_dict(), "policy_state_dictionary.pt")
