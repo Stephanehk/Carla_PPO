@@ -29,7 +29,6 @@ from global_route_planner_dao import GlobalRoutePlannerDAO
 # from scripts.launch_carla import launch_carla_server
 # from scripts.kill_carla import kill_carla
 
-
 class CarlaEnv(object):
     def __init__(self, args, town='Town01'):
         # Tunable parameters
@@ -80,7 +79,7 @@ class CarlaEnv(object):
         self._cleanup()
         self.set_sync_mode(False)
 
-    def init(self, randomize=False, save_video=False, i=0):
+    def init(self, randomize=False, save_video=True, i=0):
         self._settings = self._world.get_settings()
         #get traffic light and stop sign info
         self._list_traffic_lights = []
@@ -98,8 +97,9 @@ class CarlaEnv(object):
         self._total_distance = 0
         self._wrong_distance = 0
         self._current_index = 0
+        self.final_score = None
         self.save_video = save_video
-
+        self.reward = None
         # vehicle, sensor
         self._actor_dict = collections.defaultdict(list)
         # self.rgb_img = np.reshape(np.zeros(80*80*3), [1, 80, 80, 3]) # DEBUG
@@ -138,18 +138,18 @@ class CarlaEnv(object):
 
         self._current_velocity = None
 
-        self._spawn_car_agent()
-        print('car agent spawned')
-        self._setup_sensors(iter=i,save_video=self.save_video)
-
         # create random target to reach
         np.random.seed(6)
         self._target_pose = np.random.choice(self._map.get_spawn_points())
         while(self._target_pose is self._start_pose):
             self.target = np.random.choice(self._map.get_spawn_points())
         self.get_route()
+
+        self._spawn_car_agent()
+        print('car agent spawned')
+        self._setup_sensors(iter=i,save_video=self.save_video)
         # create statistics manager
-        self.statistics_manager = StatisticManager(self.route_waypoints)
+        self.statistics_manager = StatisticManager(self.route_waypoints,self.route_waypoints_unformatted)
         # get all initial waypoints
         self._pre_ego_waypoint = self._map.get_waypoint(self._car_agent.get_location())
         # some metrics for debugging
@@ -159,7 +159,6 @@ class CarlaEnv(object):
         self.n_stopsign_violations = 0
         self.n_route_violations = 0
         self.n_vehicle_blocked = 0
-        self.final_score = None
         self._time_start = time.time()
 
         # create sensor queues
@@ -190,7 +189,15 @@ class CarlaEnv(object):
             self._car_agent = self._world.try_spawn_actor(self._car_agent_model, self._start_pose)
         self._actor_dict['car_agent'].append(self._car_agent)
 
-    def _setup_sensors(self, save_video, height=80, width=80, fov=10, FPS=60, iter=0):
+    def draw_waypoints(self,world, waypoints):
+        for w in waypoints:
+            t = w.transform
+            begin = t.location + carla.Location(z=0.5)
+            angle = math.radians(t.rotation.yaw)
+            end = begin + carla.Location(x=math.cos(angle), y=math.sin(angle))
+            world.debug.draw_arrow(begin, end, arrow_size=0.3, life_time=1.0)
+
+    def _setup_sensors(self, save_video, height=480, width=640, fov=10, FPS=60, iter=0):
         sensor_relative_transform = carla.Transform(carla.Location(x=2.5, z=0.7))
 
         # get camera sensor
@@ -203,6 +210,7 @@ class CarlaEnv(object):
         self.out = None
         if save_video:
             print ("saving video turned on")
+            self.draw_waypoints(self._world,self.route_waypoints_unformatted)
             #self.cap = cv2.VideoCapture(0)
             fourcc = cv2.VideoWriter_fourcc('M','J','P','G')
             self.out = cv2.VideoWriter("episode_footage/output_"+str(iter)+".avi", fourcc,FPS, (height+60,width))
@@ -247,54 +255,15 @@ class CarlaEnv(object):
 
         transform = self._car_agent.get_transform()
         velocity = self._car_agent.get_velocity()
+        #print (velocity)
+        #print (transform.location)
+
+        is_completed, d2target = self.statistics_manager.segment_completed(self.route_waypoints_unformatted, self._map, transform.location)
 
         # set current waypoint to closest waypoint to agent position
-        closest_index = self.route_kdtree.query([[self._car_agent.get_location().x, self._car_agent.get_location().y,
-                                                  self._car_agent.get_location().z]], k=1)[1][0][0]
-        self.at_waypoint = self.route_waypoints[closest_index]
-        self.followed_waypoints.append(self.at_waypoint)
-
+        closest_index = self.statistics_manager._current_index
         # get command of current waypoint
         command_encoded = self.command2onehot.get(str(self.route_commands[closest_index]))
-
-        # get next target waypoint assuming they are ordered by the route planner
-        self.target_waypoint = self.route_waypoints[self.target_waypoint_idx]
-
-        if self.at_waypoint == self.target_waypoint:
-            self.followed_target_waypoints.append(self.target_waypoint)
-            self.target_waypoint_idx += 1
-            self.target_waypoint = self.route_waypoints[self.target_waypoint_idx]
-            car_agent_trigger_pos = [self._car_agent.get_location().x, self._car_agent.get_location().y, self._car_agent.get_location().z]
-            self.dist_to_target_wp_tr = self.statistics_manager.compute_route_length([car_agent_trigger_pos, self.target_waypoint])
-
-        car_agent_x = self._car_agent.get_location().x
-        car_agent_y = self._car_agent.get_location().y
-        car_agent_z = self._car_agent.get_location().z
-
-        target_x, target_y, target_z = self.target_waypoint
-        dist_x2 = (car_agent_x - target_x)**2
-        dist_y2 = (car_agent_y - target_y)**2
-        dist_z2 = (car_agent_z - target_z)**2
-        dist_to_target_wp = math.sqrt(dist_x2 + dist_y2 + dist_z2)
-        # input(dist_to_next_wp)
-
-        if self.dist_to_target_wp_tr:
-            # print(self.dist_to_target_wp_tr)
-            # print(dist_to_target_wp)
-            dist_toward_target_wp = self.dist_to_target_wp_tr - dist_to_target_wp
-        else:
-            dist_toward_target_wp = 0
-
-        # compute completed distance based on followed target waypoints TODO change to include negative progress
-        # print(self.statistics_manager.compute_route_length(self.followed_target_waypoints))
-        # print(dist_toward_target_wp)
-        self.d_completed = (self.statistics_manager.compute_route_length(self.followed_target_waypoints) + dist_toward_target_wp)
-        # if self.at_waypoint == self.target_waypoint:
-        #     print('completed distance is:', self.d_completed)
-        # print('completed distance is:', self.d_completed)
-        # get distance to destination TODO change formula for this
-        d2target = self.statistics_manager.route_record["route_length"] - \
-                   self.d_completed
 
         velocity_kmh = int(3.6*np.sqrt(np.power(velocity.x, 2) + np.power(velocity.y, 2) + np.power(velocity.z, 2)))
         velocity_mag = np.sqrt(np.power(velocity.x, 2) + np.power(velocity.y, 2) + np.power(velocity.z, 2))
@@ -317,17 +286,21 @@ class CarlaEnv(object):
         #get done information
         if self._tick > self.MAX_EP_LENGTH or self.colllided_w_static:
             done = True
-            self.events.append([TrafficEventType.ROUTE_COMPLETION, self.d_completed])
-        elif d2target < 0.1:
+            self.events.append([TrafficEventType.ROUTE_COMPLETION])
+        elif self.statistics_manager.route_record['route_percentage'] > 99:
             done = True
             self.events.append([TrafficEventType.ROUTE_COMPLETED])
         else:
             done = False
-            self.events.append([TrafficEventType.ROUTE_COMPLETION, self.d_completed])
+            self.events.append([TrafficEventType.ROUTE_COMPLETION])
 
+        # print(self.events)
         #get reward information
         self.statistics_manager.compute_route_statistics(time.time(), self.events)
+        #------------------------------------------------------------------------------------------------------------------
         reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
+        self.reward = reward
+
         self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
 
         if done:
@@ -340,7 +313,7 @@ class CarlaEnv(object):
         self.n_step_cols = 0
         return state, reward, done, [self.statistics_manager.route_record['route_percentage'], self.n_collisions,
                                      self.n_tafficlight_violations, self.n_stopsign_violations, self.n_route_violations,
-                                     self.n_vehicle_blocked, self.final_score]
+                                     self.n_vehicle_blocked,self.final_score,self.statistics_manager.route_record['route_length']]
 
     def _cleanup(self):
         """
@@ -364,6 +337,9 @@ class CarlaEnv(object):
         self._car_agent = None
         self._spectator = None
         # self._world.tick()
+        if self.out != None:
+            self.out.release()
+
 
     def set_sync_mode(self, sync):
         settings = self._world.get_settings()
@@ -389,26 +365,27 @@ class CarlaEnv(object):
         self.route_kdtree = KDTree(np.array(self.route_waypoints))
 
     def process_img(self, img, height, width, save_video):
-        img = np.frombuffer(img.raw_data, dtype='uint8').reshape(height, width, 4)
-        rgb = img[:, :, :3]
-        #rgb_f = rgb[:, :, ::-1]
-        if save_video and self.started_sim and 'route_percentage' in self.statistics_manager.route_record:
+        img_reshaped = np.frombuffer(img.raw_data, dtype='uint8').reshape(480, 640, 4)
+        rgb_reshaped = img_reshaped[:, :, :3]
+        rgb_reshaped = cv2.resize(rgb_reshaped,(height,width))
+        rgb_f = rgb_reshaped[:, :, ::-1]
+        if save_video and self.reward != None and self.started_sim and 'route_percentage' in self.statistics_manager.route_record:
+            #img = np.frombuffer(img.raw_data, dtype='uint8').reshape(height, width, 4)
+            rgb = np.frombuffer(img.raw_data, dtype='uint8').reshape(480, 640, 4)
+            rgb = rgb[:, :, :3]
             #percent complete
             rgb_mat = cv2.UMat(rgb)
             rgb_mat = cv2.copyMakeBorder(rgb_mat, 60,0,0,0, cv2.BORDER_CONSTANT, None, 0)
-            cv2.putText(rgb_mat, str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
-            #high level command
-            #cv2.putText(rgb_mat, self.high_level_command, (2,25), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
-            #closest waypoint (x,y,z)
-            #cv2.putText(rgb_mat, str(self.closest_waypoint), (2,40), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
-            #distance 2 waypoint
-            cv2.putText(rgb_mat, str(self.d_completed), (2,55), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1, cv2.LINE_AA)
-            rgb = rgb.reshape(height+60,width,3)
-            rgb_mat = cv2.resize(rgb_mat,(height,width))
+            cv2.putText(rgb_mat, str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+            #reward
+            cv2.putText(rgb_mat, str(self.reward), (2,25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+
+            # rgb = rgb.reshape(480+60,640,3)
+            rgb_mat = cv2.resize(rgb_mat,(480+60,640))
             self.out.write(rgb_mat)
             #cv2.imwrite("/scratch/cluster/stephane/cluster_quickstart/examples/running_carla/episode_footage/frame_"+str(iter)+str(self.n_img)+".png",rgb)
             self.n_img+=1
-        return rgb
+        return rgb_f
 
     '''Evaluation tools'''
 
@@ -787,7 +764,7 @@ class UnFlatten(nn.Module):
         return input.view(input.size(0), size, 1, 1)
 
 class VAE(nn.Module):
-    def __init__(self, image_channels=3, h_dim=9216, z_dim=128):
+    def __init__(self, image_channels=3, h_dim=9216, z_dim=512):
         super(VAE, self).__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(image_channels, 32, kernel_size=4, stride=2),
@@ -811,9 +788,11 @@ class VAE(nn.Module):
             nn.ReLU(),
             nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, kernel_size=5, stride=3),
+            nn.ConvTranspose2d(64, 32, kernel_size=6, stride=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(32, image_channels, kernel_size=7, stride=3),
+            nn.ConvTranspose2d(32, 16, kernel_size=6, stride=2),
+            nn.ReLU(),
+            nn.ConvTranspose2d(16, image_channels, kernel_size=6, stride=2),
             nn.Sigmoid(),
         )
 
@@ -843,6 +822,7 @@ class VAE(nn.Module):
         z, mu, logvar = self.encode(x)
         z = self.decode(z)
         return z, mu, logvar
+
 
 class PPO_Agent(nn.Module):
     def __init__(self, linear_state_dim,encoded_vector_size, action_dim, action_std):
@@ -927,12 +907,11 @@ class PPO_Agent(nn.Module):
 
 def format_frame(frame,vae):
     frame = frame[0]
-    frame = cv2.resize(frame,(127,127))
+    frame = cv2.resize(frame,(132,132))
     frame = cv2.normalize(frame, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-    frame = frame[:, :, ::-1]
-    frame = torch.FloatTensor(frame.copy())
-    h, w, c = frame.shape
-    frame = frame.unsqueeze(0).view(1, c, h, w)
+    frame = torch.Tensor(frame).to(device)
+    h,w,c = frame.shape
+    frame = frame.unsqueeze(0).view(c, h, w)
     encoded_frame,_,_ = vae.encode(frame)
     return encoded_frame
 
@@ -956,7 +935,7 @@ def train_PPO(args):
     config = wandb.config
     config.learning_rate = lr
 
-    encoded_vector_size = 128
+    encoded_vector_size = 512
     n_states = 8
     #currently the action array will be [throttle, steer]
     n_actions = 2
@@ -971,13 +950,7 @@ def train_PPO(args):
     prev_policy.load_state_dict(policy.state_dict())
 
     vae = VAE()
-    if encoded_vector_size == 128:
-        vae.load_state_dict(torch.load("dim=127VAE_state_dictionary.pt"))
-    elif encoded_vector_size == 32:
-        vae.load_state_dict(torch.load("dim=64VAE_state_dictionary.pt"))
-    else:
-        print ("no VAE with this dimension")
-        return
+    vae.load_state_dict(torch.load("dim=512VAE_state_dictionary.pt"))
     vae.eval()
 
     wandb.watch(prev_policy)
@@ -986,37 +959,37 @@ def train_PPO(args):
         # if iters % 50 == 0:
         #     kill_carla()
         #     launch_carla_server(args.world_port, gpu=3, boot_time=5)
-        try:
-            with CarlaEnv(args) as env:
-                s, _, _, _ = env.reset(False, False, iters)
-                t = 0
-                episode_reward = 0
-                done = False
-                rewards = []
-                eps_frames = []
-                eps_mes = []
-                actions = []
-                actions_log_probs = []
-                states_p = []
-                while not done:
-                    a, a_log_prob = prev_policy.choose_action(format_frame(s[0],vae), format_mes(s[1:]))
-                    s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
+        #try:
+        with CarlaEnv(args) as env:
+            s, _, _, _ = env.reset(False, False, iters)
+            t = 0
+            episode_reward = 0
+            done = False
+            rewards = []
+            eps_frames = []
+            eps_mes = []
+            actions = []
+            actions_log_probs = []
+            states_p = []
+            while not done:
+                a, a_log_prob = prev_policy.choose_action(format_frame(s[0],vae), format_mes(s[1:]))
+                s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
 
-                    # if reward != 0:
-                    #     print('reward is:', reward)
-                    eps_frames.append(format_frame(s[0],vae).detach().clone())
-                    eps_mes.append(format_mes(s[1:]).detach().clone())
-                    actions.append(a.detach().clone())
-                    actions_log_probs.append(a_log_prob.detach().clone())
-                    rewards.append(copy.deepcopy(reward))
-                    states_p.append(copy.deepcopy(s_prime))
-                    s = s_prime
-                    t += 1
-                    episode_reward += reward
-        except Exception as e:
-            print (e)
-            time.sleep(10)
-            continue
+                # if reward != 0:
+                #     print('reward is:', reward)
+                eps_frames.append(format_frame(s[0],vae).detach().clone())
+                eps_mes.append(format_mes(s[1:]).detach().clone())
+                actions.append(a.detach().clone())
+                actions_log_probs.append(a_log_prob.detach().clone())
+                rewards.append(copy.deepcopy(reward))
+                states_p.append(copy.deepcopy(s_prime))
+                s = s_prime
+                t += 1
+                episode_reward += reward
+        # except Exception as e:
+        #     print (e)
+        #     time.sleep(10)
+        #     continue
 
         if t == 1:
             continue
