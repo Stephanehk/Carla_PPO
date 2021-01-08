@@ -1010,8 +1010,8 @@ def train_PPO(args):
         wandb.log({"timesteps before termination": t})
         wandb.log({"iteration": iters})
 
-        wandb.log({"throttle": a[0] for a in actions})
-        wandb.log({"steer": a[1] for a in actions})
+        wandb.log({"throttle": a[0].cpu() for a in actions})
+        wandb.log({"steer": a[1].cpu() for a in actions})
 
         if len(eps_frames) == 1:
             continue
