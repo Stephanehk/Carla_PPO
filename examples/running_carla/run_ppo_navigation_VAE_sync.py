@@ -911,7 +911,7 @@ def format_frame(frame,vae):
     frame = cv2.normalize(frame, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
     frame = torch.Tensor(frame).to(device)
     h,w,c = frame.shape
-    frame = frame.unsqueeze(0).view(c, h, w)
+    frame = frame.unsqueeze(0).view(1, c, h, w)
     encoded_frame,_,_ = vae.encode(frame)
     return encoded_frame
 
