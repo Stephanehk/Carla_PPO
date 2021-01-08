@@ -151,7 +151,7 @@ class UnFlatten(nn.Module):
         return input.view(input.size(0), size, 1, 1)
 
 class VAE(nn.Module):
-    def __init__(self, image_channels=3, h_dim=9216, z_dim=128):
+    def __init__(self, image_channels=3, h_dim=9216, z_dim=512):
         super(VAE, self).__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(image_channels, 32, kernel_size=4, stride=2),
@@ -175,9 +175,11 @@ class VAE(nn.Module):
             nn.ReLU(),
             nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, kernel_size=5, stride=3),
+            nn.ConvTranspose2d(64, 32, kernel_size=6, stride=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(32, image_channels, kernel_size=7, stride=3),
+            nn.ConvTranspose2d(32, 16, kernel_size=6, stride=2),
+            nn.ReLU(),
+            nn.ConvTranspose2d(16, image_channels, kernel_size=6, stride=2),
             nn.Sigmoid(),
         )
 
@@ -253,7 +255,7 @@ def reservoir_sample(arr, k):
 
 def format_frame(frame):
     #print (frame)
-    frame = cv2.resize(frame,(127,127))
+    frame = cv2.resize(frame,(132,132))
     frame = cv2.normalize(frame, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
     frame = torch.Tensor(frame).to(device)
     h,w,c = frame.shape
@@ -262,7 +264,7 @@ def format_frame(frame):
 
 def format_single_frame(frame):
     #print (frame)
-    frame = cv2.resize(frame,(127,127))
+    frame = cv2.resize(frame,(132,132))
     frame = cv2.normalize(frame, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
     frame = torch.Tensor(frame).to(device)
     h,w,c = frame.shape
@@ -281,7 +283,6 @@ def train(epochs):
         batch = reservoir_sample(X,60)
         train_loss = 0
         recon_images, mu, logvar = model(batch)
-        #print (recon_images)
         #try:
         loss, bce, kld = loss_fn(recon_images, batch, mu, logvar)
         # except Exception:
@@ -295,18 +296,18 @@ def train(epochs):
         print('====> Epoch: {} Average loss: {:.4f}'.format(
               epoch, train_loss / len(X)))
     print ("DONE\n")
-    torch.save(model.state_dict(), "dim=127VAE_state_dictionary.pt")
+    torch.save(model.state_dict(), "dim=512VAE_state_dictionary.pt")
 
 def test():
     model = VAE()
-    model.load_state_dict(torch.load("/Users/stephanehatgiskessell/Desktop/Carla_PPO/examples/running_carla/dim=127VAE_state_dictionary.pt"))
+    model.load_state_dict(torch.load("/Users/stephanehatgiskessell/Desktop/Carla_PPO/examples/running_carla/dim=512VAE_state_dictionary.pt"))
     model.eval()
 
     img_ = cv2.imread("/Users/stephanehatgiskessell/Downloads/frame0.0077115736319527395.png")
     img = format_single_frame(img_)
 
     decoded_img,_,_ = model.forward(img)
-    decoded_img = decoded_img.squeeze().view(127,127,3).detach().numpy()
+    decoded_img = decoded_img.squeeze().view(132,132,3).detach().numpy()
 
     encoded_img,_,_ = model.encode(img)
     print (encoded_img.shape)
