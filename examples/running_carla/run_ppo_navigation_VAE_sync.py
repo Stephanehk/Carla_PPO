@@ -949,7 +949,7 @@ def train_PPO(args):
     prev_policy = PPO_Agent(n_states,encoded_vector_size, n_actions, action_std).to(device)
     prev_policy.load_state_dict(policy.state_dict())
 
-    vae = VAE()
+    vae = VAE().to(device)
     vae.load_state_dict(torch.load("dim=512VAE_state_dictionary.pt"))
     vae.eval()
 
