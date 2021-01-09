@@ -79,7 +79,7 @@ class CarlaEnv(object):
         self._cleanup()
         self.set_sync_mode(False)
 
-    def init(self, randomize=False, save_video=True, i=0):
+    def init(self, randomize=False, save_video=False, i=0):
         self._settings = self._world.get_settings()
         #get traffic light and stop sign info
         self._list_traffic_lights = []
@@ -1010,8 +1010,8 @@ def train_PPO(args):
         wandb.log({"timesteps before termination": t})
         wandb.log({"iteration": iters})
 
-        wandb.log({"throttle": a[0].cpu() for a in actions})
-        wandb.log({"steer": a[1].cpu() for a in actions})
+        wandb.log({"throttle": a[0][0].cpu() for a in actions})
+        wandb.log({"steer": a[0][1].cpu() for a in actions})
 
         if len(eps_frames) == 1:
             continue
