@@ -820,12 +820,15 @@ class PPO_Agent(nn.Module):
         X = torch.cat((vec, mes), 1)
         return self.criticLin(X)
 
-    def save_distrivution (mu,variance,dist_name):
-        fig = plt.figure()
+    def save_distribution (mu,variance,dist_name):
+        #   fig = plt.figure()
         sigma = math.sqrt(variance)
         x = np.linspace(mu - 3*sigma, mu + 3*sigma, 100)
-        plt.plot(x, stats.norm.pdf(x, mu, sigma))
-        fig.savefig("distributions/" + dist_name + str(self._tick) + ".png", dpi=fig.dpi)
+        dist = stats.norm.pdf(x, mu, sigma)
+        wandb.log({dist_name: wandb.Histogram(dist),'custom_step': np.abs(x[1]-x[0])})
+
+        # plt.plot(x, stats.norm.pdf(x, mu, sigma))
+        # fig.savefig("distributions/" + dist_name + str(self._tick) + ".png", dpi=fig.dpi)
 
 
     def choose_action(self, frame, mes):
@@ -837,8 +840,8 @@ class PPO_Agent(nn.Module):
             gauss_dist = MultivariateNormal(mean, cov_matrix)
             action = gauss_dist.sample()
             action_log_prob = gauss_dist.log_prob(action)
-            save_distrivution (gauss_dist.mean[0],gauss_dist.variance[0],"throttle")
-            save_distrivution (gauss_dist.mean[1],gauss_dist.variance[1],"stear")
+            save_distribution (gauss_dist.mean[0],gauss_dist.variance[0],"throttle distribution")
+            save_distribution (gauss_dist.mean[1],gauss_dist.variance[1],"stear distribution")
         return action, action_log_prob
 
     def get_training_params(self, frame, mes, action):
