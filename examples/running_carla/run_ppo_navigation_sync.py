@@ -17,6 +17,8 @@ from torch.distributions import MultivariateNormal
 import wandb
 import copy
 from shapely.geometry import LineString
+import matplotlib.pyplot as plt
+import scipy.stats as stats
 
 from traffic_events import TrafficEventType
 from statistics_manager import StatisticManager
@@ -80,7 +82,7 @@ class CarlaEnv(object):
         self._cleanup()
         self.set_sync_mode(False)
 
-    def init(self, randomize=False, save_video=True, i=0):
+    def init(self, randomize=False, save_video=False, i=0):
         self._settings = self._world.get_settings()
         #get traffic light and stop sign info
         self._list_traffic_lights = []
@@ -818,6 +820,14 @@ class PPO_Agent(nn.Module):
         X = torch.cat((vec, mes), 1)
         return self.criticLin(X)
 
+    def save_distrivution (mu,variance,dist_name):
+        fig = plt.figure()
+        sigma = math.sqrt(variance)
+        x = np.linspace(mu - 3*sigma, mu + 3*sigma, 100)
+        plt.plot(x, stats.norm.pdf(x, mu, sigma))
+        fig.savefig("distributions/" + dist_name + str(self._tick) + ".png", dpi=fig.dpi)
+
+
     def choose_action(self, frame, mes):
         #state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         #state = torch.FloatTensor(state).to(device)
@@ -827,6 +837,8 @@ class PPO_Agent(nn.Module):
             gauss_dist = MultivariateNormal(mean, cov_matrix)
             action = gauss_dist.sample()
             action_log_prob = gauss_dist.log_prob(action)
+            save_distrivution (gauss_dist.mean[0],gauss_dist.variance[0],"throttle")
+            save_distrivution (gauss_dist.mean[1],gauss_dist.variance[1],"stear")
         return action, action_log_prob
 
     def get_training_params(self, frame, mes, action):
