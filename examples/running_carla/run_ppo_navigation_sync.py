@@ -256,6 +256,7 @@ class CarlaEnv(object):
 
         transform = self._car_agent.get_transform()
         velocity = self._car_agent.get_velocity()
+        rotation = transform.rotation
         #print (velocity)
         #print (transform.location)
 
@@ -275,7 +276,7 @@ class CarlaEnv(object):
         assert all(x.frame == self.frame for x in state)
         state = [self.process_img(img, 80, 80, self.save_video) for img in state]
         # state = self.rgb_img # DEBUG
-        state = [state, velocity_mag, d2target]
+        state = [state, velocity_mag, d2target,rotation]
         state.extend(command_encoded)
 
         #check for traffic light infraction/stoplight infraction
@@ -876,7 +877,7 @@ def train_PPO(args):
     config.learning_rate = lr
 
 
-    n_states = 8
+    n_states = 9
     #currently the action array will be [throttle, steer]
     n_actions = 2
 
@@ -969,7 +970,7 @@ def train_PPO(args):
             advantage = (advantage - advantage.mean()) / advantage.std()
             update1 = (policy_ratio*advantage).float()
             update2 = (torch.clamp(policy_ratio, 1-clip_val, 1+clip_val) * advantage).float()
-            loss = -torch.min(update1, update2) + 0.5*mse(state_values.float(), rewards.float()) - 0.001*entropies
+            loss = -torch.min(update1, update2) + 0.5*mse(state_values.float(), rewards.float()) - 0.01*entropies
 
 
             optimizer.zero_grad()
