@@ -912,35 +912,35 @@ def train_PPO(args):
         # if iters % 50 == 0:
         #     kill_carla()
         #     launch_carla_server(args.world_port, gpu=3, boot_time=5)
-        try:
-            with CarlaEnv(args) as env:
-                s, _, _, _ = env.reset(False, False, iters)
-                t = 0
-                episode_reward = 0
-                done = False
-                rewards = []
-                eps_frames = []
-                eps_mes = []
-                actions = []
-                actions_log_probs = []
-                states_p = []
-                while not done:
-                    a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
-                    s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
+        #try:
+        with CarlaEnv(args) as env:
+            s, _, _, _ = env.reset(False, False, iters)
+            t = 0
+            episode_reward = 0
+            done = False
+            rewards = []
+            eps_frames = []
+            eps_mes = []
+            actions = []
+            actions_log_probs = []
+            states_p = []
+            while not done:
+                a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
+                s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
 
-                    eps_frames.append(format_frame(s[0]).detach().clone())
-                    eps_mes.append(format_mes(s[1:]).detach().clone())
-                    actions.append(a.detach().clone())
-                    actions_log_probs.append(a_log_prob.detach().clone())
-                    rewards.append(copy.deepcopy(reward))
-                    states_p.append(copy.deepcopy(s_prime))
-                    s = s_prime
-                    t += 1
-                    episode_reward += reward
-        except Exception as e:
-            print (e)
-            time.sleep(10)
-            continue
+                eps_frames.append(format_frame(s[0]).detach().clone())
+                eps_mes.append(format_mes(s[1:]).detach().clone())
+                actions.append(a.detach().clone())
+                actions_log_probs.append(a_log_prob.detach().clone())
+                rewards.append(copy.deepcopy(reward))
+                states_p.append(copy.deepcopy(s_prime))
+                s = s_prime
+                t += 1
+                episode_reward += reward
+        # except Exception as e:
+        #     print (e)
+        #     time.sleep(10)
+        #     continue
 
         if t == 1:
             continue
