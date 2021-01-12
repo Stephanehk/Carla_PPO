@@ -820,7 +820,7 @@ class PPO_Agent(nn.Module):
         X = torch.cat((vec, mes), 1)
         return self.criticLin(X)
 
-    def save_distribution (mu,variance,dist_name):
+    def save_distribution (self,mu,variance,dist_name):
         #   fig = plt.figure()
         sigma = math.sqrt(variance)
         x = np.linspace(mu - 3*sigma, mu + 3*sigma, 100)
@@ -840,8 +840,8 @@ class PPO_Agent(nn.Module):
             gauss_dist = MultivariateNormal(mean, cov_matrix)
             action = gauss_dist.sample()
             action_log_prob = gauss_dist.log_prob(action)
-            save_distribution (gauss_dist.mean[0],gauss_dist.variance[0],"throttle distribution")
-            save_distribution (gauss_dist.mean[1],gauss_dist.variance[1],"stear distribution")
+            self.save_distribution (gauss_dist.mean[0],gauss_dist.variance[0],"throttle distribution")
+            self.save_distribution (gauss_dist.mean[1],gauss_dist.variance[1],"stear distribution")
         return action, action_log_prob
 
     def get_training_params(self, frame, mes, action):
@@ -1108,9 +1108,9 @@ def launch_client(args):
 def main(args):
     # Create client outside of Carla environment to avoid creating zombie clients
     args.client = launch_client(args)
-    #train_PPO(args)
+    train_PPO(args)
     #random_baseline(args)
-    run_model(args)
+    #run_model(args)
 
 if __name__ == '__main__':
     import argparse
