@@ -275,7 +275,7 @@ class CarlaEnv(object):
         assert all(x.frame == self.frame for x in state)
         state = [self.process_img(img, 80, 80, self.save_video) for img in state]
         # state = self.rgb_img # DEBUG
-        state = [state, velocity_mag, d2target,rotation]
+        state = [state, velocity_mag, d2target,rotation.pitch,rotation.yaw,rotation.roll]
         state.extend(command_encoded)
 
         #check for traffic light infraction/stoplight infraction
@@ -937,7 +937,7 @@ def train_PPO(args):
     config.learning_rate = lr
 
     encoded_vector_size = 512
-    n_states = 9
+    n_states = 11
     #currently the action array will be [throttle, steer]
     n_actions = 2
 
