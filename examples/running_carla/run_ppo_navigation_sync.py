@@ -82,7 +82,7 @@ class CarlaEnv(object):
         self._cleanup()
         self.set_sync_mode(False)
 
-    def init(self, randomize=False, save_video=False, i=0):
+    def init(self, randomize=False, save_video=True, i=0):
         self._settings = self._world.get_settings()
         #get traffic light and stop sign info
         self._list_traffic_lights = []
@@ -103,6 +103,7 @@ class CarlaEnv(object):
         self.final_score = None
         self.save_video = save_video
         self.reward = None
+        self.total_reward = 0
         # vehicle, sensor
         self._actor_dict = collections.defaultdict(list)
         # self.rgb_img = np.reshape(np.zeros(80*80*3), [1, 80, 80, 3]) # DEBUG
@@ -304,6 +305,7 @@ class CarlaEnv(object):
         #------------------------------------------------------------------------------------------------------------------
         reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
         self.reward = reward
+        self.total_reward += reward
 
         self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
 
@@ -380,10 +382,10 @@ class CarlaEnv(object):
             #percent complete
             rgb_mat = cv2.UMat(rgb)
             rgb_mat = cv2.copyMakeBorder(rgb_mat, 60,0,0,0, cv2.BORDER_CONSTANT, None, 0)
-            cv2.putText(rgb_mat, str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
-            #reward
-            cv2.putText(rgb_mat, str(self.reward), (2,25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
-
+            cv2.putText(rgb_mat, "Route % complete: " + str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(rgb_mat, "Step reward: " + str(self.reward), (2,20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(rgb_mat, "Total reward: " + str(self.total_reward), (2,30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(rgb_mat, "WP index: " + str(self.statistics_manager._current_index), (2,40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
             # rgb = rgb.reshape(480+60,640,3)
             rgb_mat = cv2.resize(rgb_mat,(480+60,640))
             self.out.write(rgb_mat)
@@ -1080,7 +1082,7 @@ def random_baseline(args):
     config = wandb.config
     #config.learning_rate = lr
 
-    n_states = 8
+    n_states = 11
     #currently the action array will be [throttle, steer]
     n_actions = 2
 
@@ -1135,8 +1137,8 @@ def launch_client(args):
 def main(args):
     # Create client outside of Carla environment to avoid creating zombie clients
     args.client = launch_client(args)
-    train_PPO(args)
-    #random_baseline(args)
+    #train_PPO(args)
+    random_baseline(args)
     #run_model(args)
 
 if __name__ == '__main__':
