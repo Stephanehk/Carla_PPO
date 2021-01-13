@@ -63,11 +63,12 @@ class StatisticManager:
             wp_veh = actor_location - ref_waypoint.transform.location                    # vector waypoint - vehicle
             dot_ve_wp = wp_veh.x * wp_dir.x + wp_veh.y * wp_dir.y + wp_veh.z * wp_dir.z
 
-            if dot_ve_wp > 0:
+            if dot_ve_wp > 0 or index == self._current_index:
                 # good! segment completed!
                 self._current_index = index
-                self._percentage_route_completed = 100.0 * float(self._accum_meters[self._current_index]) \
-                    / float(self._accum_meters[-1])
+                self._percentage_route_completed = 100.0 * (
+                            float(self._accum_meters[self._current_index]) + float(dot_ve_wp)) \
+                                                   / float(self._accum_meters[-1])
                 self.route_record['route_percentage'] = self._percentage_route_completed
 
         d2target = self.route_record['route_length'] - float(self._accum_meters[-1])
