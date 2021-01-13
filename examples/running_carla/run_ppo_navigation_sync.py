@@ -965,12 +965,14 @@ def train_PPO(args):
         if len(eps_frames) == 1:
             continue
 
+        #here we are taking the raw reward at each timestep and converting it into a discounted cummulative reward
+        #R_t = sum from i = t to T (gamma * r_i)
         discounted_reward = 0
         for i in range(len(rewards)):
             rewards[len(rewards)-1-i] = rewards[len(rewards)-1-i] + (gamma*discounted_reward)
             discounted_reward = rewards[len(rewards)-1-i]
-        # rewards = [episode_reward - r for r in rewards] ToDo: check that this is equivalent to the above
 
+        #normalizing reward
         rewards = torch.tensor(rewards).to(device)
         rewards = (rewards-rewards.mean())/rewards.std()
 
@@ -979,12 +981,17 @@ def train_PPO(args):
         for i in range(n_epochs):
             current_action_log_probs, state_values, entropies = policy.get_training_params(eps_frames, eps_mes, actions)
 
+            #this is our policy ration pi'(a|s)/pi(a|s)
             policy_ratio = torch.exp(current_action_log_probs - actions_log_probs.detach())
-            #policy_ratio = current_action_log_probs.detach()/actions_log_probs
+
+            #generalized advantage estimation:
+            #A_t = R_t - V(s_t)
             advantage = rewards - state_values.detach()
             advantage = (advantage - advantage.mean()) / advantage.std()
+            #clip policy ration * advantage if necessary
             update1 = (policy_ratio*advantage).float()
             update2 = (torch.clamp(policy_ratio, 1-clip_val, 1+clip_val) * advantage).float()
+            #KL-divergence loss
             loss = -torch.min(update1, update2) + 0.5*mse(state_values.float(), rewards.float()) - 0.01*entropies
 
 
