@@ -840,17 +840,17 @@ class PPO_Agent(nn.Module):
             gauss_dist = MultivariateNormal(mean, cov_matrix)
             action = gauss_dist.sample()
             action_log_prob = gauss_dist.log_prob(action)
-            self.save_distribution (gauss_dist.mean[0],gauss_dist.variance[0],"throttle distribution")
-            self.save_distribution (gauss_dist.mean[1],gauss_dist.variance[1],"stear distribution")
+            # self.save_distribution (gauss_dist.mean[0][0],gauss_dist.variance[0][0],"throttle distribution")
+            # self.save_distribution (gauss_dist.mean[0][1],gauss_dist.variance[0][1],"stear distribution")
         return action, action_log_prob
 
     def get_training_params(self, frame, mes, action):
-        frame = torch.stack(frame)
-        mes = torch.stack(mes)
-        if len(list(frame.size())) > 4:
-            frame = torch.squeeze(frame)
-        if len(list(mes.size())) > 2:
-            mes = torch.squeeze(mes)
+        frame = torch.squeeze(torch.stack(frame))
+        mes = torch.squeeze(torch.stack(mes))
+        # if len(list(frame.size())) > 4:
+        #     frame = torch.squeeze(frame)
+        # if len(list(mes.size())) > 2:
+        #     mes = torch.squeeze(mes)
 
         action = torch.stack(action)
 
@@ -881,12 +881,13 @@ def train_PPO(args):
     wandb.init(project='PPO_Carla_Navigation')
     n_iters = 10000
     n_epochs = 50
-    max_steps = 2000
+    update_timestep = 200
     gamma = 0.99
     lr = 0.0001
     clip_val = 0.2
     avg_t = 0
     moving_avg = 0
+    total_timesteps = 1
 
     config = wandb.config
     config.learning_rate = lr
@@ -905,8 +906,15 @@ def train_PPO(args):
 
     prev_policy = PPO_Agent(n_states, n_actions, action_std).to(device)
     prev_policy.load_state_dict(policy.state_dict())
-
     wandb.watch(prev_policy)
+
+    rewards = []
+    eps_frames = []
+    eps_mes = []
+    actions = []
+    actions_log_probs = []
+    states_p = []
+    terminals = []
 
     for iters in range(n_iters):
         # if iters % 50 == 0:
@@ -918,12 +926,6 @@ def train_PPO(args):
             t = 0
             episode_reward = 0
             done = False
-            rewards = []
-            eps_frames = []
-            eps_mes = []
-            actions = []
-            actions_log_probs = []
-            states_p = []
             while not done:
                 a, a_log_prob = prev_policy.choose_action(format_frame(s[0]), format_mes(s[1:]))
                 s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
@@ -934,9 +936,64 @@ def train_PPO(args):
                 actions_log_probs.append(a_log_prob.detach().clone())
                 rewards.append(copy.deepcopy(reward))
                 states_p.append(copy.deepcopy(s_prime))
+                terminals.append(copy.deepcopy(done))
                 s = s_prime
                 t += 1
+                total_timesteps+=1
                 episode_reward += reward
+
+                if total_timesteps % update_timestep == 0:
+                    #here we are taking the raw reward at each timestep and converting it into a discounted cummulative reward
+                    #R_t = sum from i = t to T (gamma * r_i)
+                    discounted_reward = 0
+                    for i in range (len(rewards)):
+                        if terminals[len(rewards)-1-i]:
+                            discounted_reward = 0
+                        rewards[len(rewards)-1-i] = rewards[len(rewards)-1-i] + (gamma*discounted_reward)
+                        discounted_reward = rewards[len(rewards)-1-i]
+
+                    #normalizing reward
+                    rewards = torch.tensor(rewards).to(device)
+                    rewards = (rewards-rewards.mean())/rewards.std()
+
+                    actions_log_probs = torch.FloatTensor(actions_log_probs).to(device)
+                    #train PPO
+                    for i in range(n_epochs):
+                        current_action_log_probs, state_values, entropies = policy.get_training_params(eps_frames, eps_mes, actions)
+
+                        #this is our policy ration pi'(a|s)/pi(a|s)
+                        policy_ratio = torch.exp(current_action_log_probs - actions_log_probs.detach())
+
+                        #generalized advantage estimation:
+                        #A_t = R_t - V(s_t)
+                        advantage = rewards - state_values.detach()
+                        advantage = (advantage - advantage.mean()) / advantage.std()
+                        #clip policy ration * advantage if necessary
+                        update1 = (policy_ratio*advantage).float()
+                        update2 = (torch.clamp(policy_ratio, 1-clip_val, 1+clip_val) * advantage).float()
+                        #KL-divergence loss
+                        loss = -torch.min(update1, update2) + 0.5*mse(state_values.float(), rewards.float()) - 0.01*entropies
+
+                        optimizer.zero_grad()
+                        loss.mean().backward()
+                        optimizer.step()
+                        if i % 10 == 0:
+                            print("    on epoch " + str(i))
+
+                    if iters % 50 == 0:
+                        torch.save(policy.state_dict(), "vanilla_policy_state_dictionary.pt")
+                    prev_policy.load_state_dict(policy.state_dict())
+
+                    rewards = list(rewards.numpy())
+                    actions_log_probs = list(actions_log_probs.numpy())
+                    del rewards[:]
+                    del eps_frames[:]
+                    del eps_mes[:]
+                    del actions[:]
+                    del actions_log_probs[:]
+                    del states_p[:]
+                    del terminals[:]
+
         # except Exception as e:
         #     print (e)
         #     time.sleep(10)
@@ -962,49 +1019,8 @@ def train_PPO(args):
         wandb.log({"timesteps before termination": t})
         wandb.log({"iteration": iters})
 
-        if len(eps_frames) == 1:
-            continue
-
-        #here we are taking the raw reward at each timestep and converting it into a discounted cummulative reward
-        #R_t = sum from i = t to T (gamma * r_i)
-        discounted_reward = 0
-        for i in range(len(rewards)):
-            rewards[len(rewards)-1-i] = rewards[len(rewards)-1-i] + (gamma*discounted_reward)
-            discounted_reward = rewards[len(rewards)-1-i]
-
-        #normalizing reward
-        rewards = torch.tensor(rewards).to(device)
-        rewards = (rewards-rewards.mean())/rewards.std()
-
-        actions_log_probs = torch.FloatTensor(actions_log_probs).to(device)
-        #train PPO
-        for i in range(n_epochs):
-            current_action_log_probs, state_values, entropies = policy.get_training_params(eps_frames, eps_mes, actions)
-
-            #this is our policy ration pi'(a|s)/pi(a|s)
-            policy_ratio = torch.exp(current_action_log_probs - actions_log_probs.detach())
-
-            #generalized advantage estimation:
-            #A_t = R_t - V(s_t)
-            advantage = rewards - state_values.detach()
-            advantage = (advantage - advantage.mean()) / advantage.std()
-            #clip policy ration * advantage if necessary
-            update1 = (policy_ratio*advantage).float()
-            update2 = (torch.clamp(policy_ratio, 1-clip_val, 1+clip_val) * advantage).float()
-            #KL-divergence loss
-            loss = -torch.min(update1, update2) + 0.5*mse(state_values.float(), rewards.float()) - 0.01*entropies
-
-
-            optimizer.zero_grad()
-            loss.mean().backward()
-            optimizer.step()
-            if i % 10 == 0:
-                print("    on epoch " + str(i))
-            #wandb.log({"loss": loss.mean()})
-
-        if iters % 50 == 0:
-            torch.save(policy.state_dict(), "vanilla_policy_state_dictionary.pt")
-        prev_policy.load_state_dict(policy.state_dict())
+        # if len(eps_frames) == 1:
+        #     continue
 
 
 def run_model(args):
@@ -1012,7 +1028,7 @@ def run_model(args):
     n_epochs = 50
     avg_t = 0
     moving_avg = 0
-    n_states = 8
+    n_states = 11
     #currently the action array will be [throttle, steer]
     n_actions = 2
 
@@ -1048,7 +1064,6 @@ def run_model(args):
         print("Percent completed: " + str(info[0]))
         avg_t += t
         moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
-
 
 def random_baseline(args):
     wandb.init(project='PPO_Carla_Navigation')
