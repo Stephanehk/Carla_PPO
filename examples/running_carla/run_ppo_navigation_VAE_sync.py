@@ -17,8 +17,10 @@ from torch.distributions import MultivariateNormal
 import wandb
 import copy
 from PIL import Image, ImageDraw
+from shapely.geometry import LineStrings
+import matplotlib.pyplot as plt
+import scipy.stats as stats
 
-from shapely.geometry import LineString
 from traffic_events import TrafficEventType
 from statistics_manager import StatisticManager
 #IK this is bad, fix file path stuff later :(
@@ -754,7 +756,7 @@ class CarlaEnv(object):
 
         return am_ab > 0 and am_ab < ab_ab and am_ad > 0 and am_ad < ad_ad
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
 class Flatten(nn.Module):
     def forward(self, input):
