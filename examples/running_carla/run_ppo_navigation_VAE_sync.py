@@ -31,6 +31,7 @@ from global_route_planner_dao import GlobalRoutePlannerDAO
 # from scripts.launch_carla import launch_carla_server
 # from scripts.kill_carla import kill_carla
 
+
 class CarlaEnv(object):
     def __init__(self, args, town='Town01'):
         # Tunable parameters
@@ -102,6 +103,7 @@ class CarlaEnv(object):
         self.final_score = None
         self.save_video = save_video
         self.reward = None
+        self.total_reward = 0
         # vehicle, sensor
         self._actor_dict = collections.defaultdict(list)
         # self.rgb_img = np.reshape(np.zeros(80*80*3), [1, 80, 80, 3]) # DEBUG
@@ -303,6 +305,7 @@ class CarlaEnv(object):
         #------------------------------------------------------------------------------------------------------------------
         reward = self.statistics_manager.route_record["score_composed"] - self.statistics_manager.prev_score
         self.reward = reward
+        self.total_reward += reward
 
         self.statistics_manager.prev_score = self.statistics_manager.route_record["score_composed"]
 
@@ -379,10 +382,10 @@ class CarlaEnv(object):
             #percent complete
             rgb_mat = cv2.UMat(rgb)
             rgb_mat = cv2.copyMakeBorder(rgb_mat, 60,0,0,0, cv2.BORDER_CONSTANT, None, 0)
-            cv2.putText(rgb_mat, str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
-            #reward
-            cv2.putText(rgb_mat, str(self.reward), (2,25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
-
+            cv2.putText(rgb_mat, "Route % complete: " + str(self.statistics_manager.route_record['route_percentage']), (2,10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(rgb_mat, "Step reward: " + str(self.reward), (2,25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(rgb_mat, "Total reward: " + str(self.total_reward), (2,40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(rgb_mat, "WP index: " + str(self.statistics_manager._current_index), (2,55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
             # rgb = rgb.reshape(480+60,640,3)
             rgb_mat = cv2.resize(rgb_mat,(480+60,640))
             self.out.write(rgb_mat)
@@ -756,6 +759,7 @@ class CarlaEnv(object):
 
         return am_ab > 0 and am_ab < ab_ab and am_ad > 0 and am_ad < ad_ad
 
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
 class Flatten(nn.Module):
@@ -889,13 +893,8 @@ class PPO_Agent(nn.Module):
         return action, action_log_prob
 
     def get_training_params(self, frame, mes, action):
-        frame = torch.stack(frame)
-        mes = torch.stack(mes)
-        if len(list(frame.size())) > 4:
-            frame = torch.squeeze(frame)
-        if len(list(mes.size())) > 2:
-            mes = torch.squeeze(mes)
-
+        frame = torch.squeeze(torch.stack(frame))
+        mes = torch.squeeze(torch.stack(mes))
         action = torch.stack(action)
 
         mean = self.actor_(frame, mes)
@@ -928,15 +927,17 @@ def train_PPO(args):
     wandb.init(project='PPO_Carla_Navigation')
     n_iters = 10000
     n_epochs = 50
-    max_steps = 2000
+    update_timestep = 200
     gamma = 0.99
     lr = 0.0001
     clip_val = 0.2
     avg_t = 0
     moving_avg = 0
+    total_timesteps = 1
 
     config = wandb.config
     config.learning_rate = lr
+
 
     encoded_vector_size = 512
     n_states = 11
@@ -958,6 +959,14 @@ def train_PPO(args):
 
     wandb.watch(prev_policy)
 
+    rewards = []
+    eps_frames = []
+    eps_mes = []
+    actions = []
+    actions_log_probs = []
+    states_p = []
+    terminals = []
+
     for iters in range(n_iters):
         # if iters % 50 == 0:
         #     kill_carla()
@@ -968,12 +977,6 @@ def train_PPO(args):
             t = 0
             episode_reward = 0
             done = False
-            rewards = []
-            eps_frames = []
-            eps_mes = []
-            actions = []
-            actions_log_probs = []
-            states_p = []
             while not done:
                 a, a_log_prob = prev_policy.choose_action(format_frame(s[0],vae), format_mes(s[1:]))
                 s_prime, reward, done, info = env.step(action=a.detach().tolist(), timeout=2)
@@ -986,9 +989,65 @@ def train_PPO(args):
                 actions_log_probs.append(a_log_prob.detach().clone())
                 rewards.append(copy.deepcopy(reward))
                 states_p.append(copy.deepcopy(s_prime))
+                terminals.append(copy.deepcopy(done))
                 s = s_prime
                 t += 1
+                total_timesteps+=1
                 episode_reward += reward
+
+                if total_timesteps % update_timestep == 0:
+                    #here we are taking the raw reward at each timestep and converting it into a discounted cummulative reward
+                    #R_t = sum from i = t to T (gamma * r_i)
+
+                    discounted_reward = 0 #TODO: rename to return
+                    for i in range (len(rewards)):
+                        if terminals[len(rewards)-1-i]:
+                            discounted_reward = 0
+                        rewards[len(rewards)-1-i] = rewards[len(rewards)-1-i] + (gamma*discounted_reward)
+                        discounted_reward = rewards[len(rewards)-1-i]
+
+                    #normalizing reward
+                    rewards = torch.tensor(rewards).to(device)
+                    rewards = (rewards-rewards.mean())/rewards.std() #TODO: dont normalize reward
+
+                    actions_log_probs = torch.FloatTensor(actions_log_probs).to(device)
+                    #train PPO
+                    for i in range(n_epochs):
+                        current_action_log_probs, state_values, entropies = policy.get_training_params(eps_frames, eps_mes, actions)
+
+                        #this is our policy ration pi'(a|s)/pi(a|s)
+                        policy_ratio = torch.exp(current_action_log_probs - actions_log_probs.detach())
+
+                        #generalized advantage estimation:
+                        #A_t = R_t - V(s_t)
+                        advantage = rewards - state_values.detach()
+                        advantage = (advantage - advantage.mean()) / advantage.std()
+                        #clip policy ration * advantage if necessary
+                        update1 = (policy_ratio*advantage).float() #rename to loss_cpi
+                        update2 = (torch.clamp(policy_ratio, 1-clip_val, 1+clip_val) * advantage).float() #rename to loss_clipped
+                        #KL-divergence loss
+                        loss = -torch.min(update1, update2) + 0.5*mse(state_values.float(), rewards.float()) - 0.01*entropies #rename to loss clip
+
+                        optimizer.zero_grad()
+                        loss.mean().backward()
+                        optimizer.step()
+                        if i % 10 == 0:
+                            print("    on epoch " + str(i))
+
+                    if iters % 50 == 0:
+                        torch.save(policy.state_dict(), "VAE_policy_state_dictionary.pt")
+                    prev_policy.load_state_dict(policy.state_dict())
+
+                    rewards = list(rewards.numpy())
+                    actions_log_probs = list(actions_log_probs.numpy())
+                    del rewards[:]
+                    del eps_frames[:]
+                    del eps_mes[:]
+                    del actions[:]
+                    del actions_log_probs[:]
+                    del states_p[:]
+                    del terminals[:]
+
         # except Exception as e:
         #     print (e)
         #     time.sleep(10)
@@ -1001,57 +1060,18 @@ def train_PPO(args):
         avg_t += t
         moving_avg = (episode_reward - moving_avg) * (2/(iters+2)) + moving_avg
 
-        wandb.log({"episode_reward (suggested reward w/ ri)": episode_reward})
-        wandb.log({"average_reward (suggested reward w/ ri)": moving_avg})
-        wandb.log({"percent_completed": info[0]})
-        wandb.log({"number_of_collisions": info[1]})
-        wandb.log({"number_of_trafficlight_violations": info[2]})
-        wandb.log({"number_of_stopsign_violations": info[3]})
-        wandb.log({"number_of_route_violations": info[4]})
-        wandb.log({"number_of_times_vehicle_blocked": info[5]})
-        wandb.log({"final score": info[6]})
-        wandb.log({"timesteps before termination": t})
-        wandb.log({"iteration": iters})
-
-        wandb.log({"throttle": a[0][0].cpu() for a in actions})
-        wandb.log({"steer": a[0][1].cpu() for a in actions})
-
-        if len(eps_frames) == 1:
-            continue
-
-        discounted_reward = 0
-        for i in range(len(rewards)):
-            rewards[len(rewards)-1-i] = rewards[len(rewards)-1-i] + (gamma*discounted_reward)
-            discounted_reward = rewards[len(rewards)-1-i]
-        # rewards = [episode_reward - r for r in rewards] ToDo: check that this is equivalent to the above
-
-        rewards = torch.tensor(rewards).to(device)
-        rewards = (rewards-rewards.mean())/rewards.std()
-
-        actions_log_probs = torch.FloatTensor(actions_log_probs).to(device)
-        #train PPO
-        for i in range(n_epochs):
-            current_action_log_probs, state_values, entropies = policy.get_training_params(eps_frames, eps_mes, actions)
-
-            policy_ratio = torch.exp(current_action_log_probs - actions_log_probs.detach())
-            #policy_ratio = current_action_log_probs.detach()/actions_log_probs
-            advantage = rewards - state_values.detach()
-            advantage = (advantage - advantage.mean()) / advantage.std()
-            update1 = (policy_ratio*advantage).float()
-            update2 = (torch.clamp(policy_ratio, 1-clip_val, 1+clip_val) * advantage).float()
-            loss = -torch.min(update1, update2) + 0.5*mse(state_values.float(), rewards.float()) - 0.01*entropies
-
-
-            optimizer.zero_grad()
-            loss.mean().backward()
-            optimizer.step()
-            if i % 10 == 0:
-                print("    on epoch " + str(i))
-            wandb.log({"loss": loss.mean()})
-
-        if iters % 50 == 0:
-            torch.save(policy.state_dict(), "policy_state_dictionary.pt")
-        prev_policy.load_state_dict(policy.state_dict())
+        wandb.log({"episode_reward (suggested reward w/ ri)": episode_reward,
+        "average_reward (suggested reward w/ ri)": moving_avg,
+        "percent_completed": info[0],
+        "number_of_collisions": info[1],
+        "number_of_trafficlight_violations": info[2],
+        "number_of_stopsign_violations": info[3],
+        "number_of_route_violations": info[4],
+        "number_of_times_vehicle_blocked": info[5],
+        "final score": info[6],
+        "route length": info[7],
+        "timesteps before termination": t,
+        "iteration": iters})
 
 
 def launch_client(args):
