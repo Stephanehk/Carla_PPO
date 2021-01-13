@@ -840,6 +840,11 @@ class PPO_Agent(nn.Module):
             gauss_dist = MultivariateNormal(mean, cov_matrix)
             action = gauss_dist.sample()
             action_log_prob = gauss_dist.log_prob(action)
+
+            print (mean)
+            print (gauss_dist.mean)
+            print (action)
+            print ("\n")
             # self.save_distribution (gauss_dist.mean[0][0],gauss_dist.variance[0][0],"throttle distribution")
             # self.save_distribution (gauss_dist.mean[0][1],gauss_dist.variance[0][1],"stear distribution")
         return action, action_log_prob
@@ -852,13 +857,13 @@ class PPO_Agent(nn.Module):
         # if len(list(mes.size())) > 2:
         #     mes = torch.squeeze(mes)
 
-        action = torch.stack(action)
+        action = torch.squeeze(torch.stack(action))
 
         mean = self.actor(frame, mes)
         action_expanded = self.action_var.expand_as(mean)
         cov_matrix = torch.diag_embed(action_expanded).to(device)
-
         gauss_dist = MultivariateNormal(mean, cov_matrix)
+
         action_log_prob = gauss_dist.log_prob(action).to(device)
         entropy = gauss_dist.entropy().to(device)
         state_value = torch.squeeze(self.critic(frame, mes)).to(device)
